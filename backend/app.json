@@ -1,0 +1,21 @@
+{
+    "apps": [
+        {
+            "name": "wallet-backend",
+            "script": "server.js",
+            "env": {
+                "PORT": 3000,
+                "PHASE": "production"
+            },
+            "log_date_format": "YYYY-MM-DD HH:mm:ss",
+            "log_file": "/dev/null",
+            "error_file": "/dev/null",
+            "out_file": "/dev/null",
+            "pid_file": "logs/wallet.pid",
+            "exec_mode": "fork_mode",
+            "watch": true,
+            "watch_delay": 1000,
+            "ignore_watch": ["node_modules", "logs", "public"]
+        }
+    ]
+}

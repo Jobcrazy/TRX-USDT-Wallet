@@ -1,0 +1,13 @@
+html,
+body {
+  padding: 0;
+  margin: 0;
+  width: 100vw;
+  overflow: hidden;
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  background-color: #eff2f5;
+  /*
+  user-select: none;
+  -webkit-touch-callout: none; 
+  -webkit-user-select: none;*/
+}
