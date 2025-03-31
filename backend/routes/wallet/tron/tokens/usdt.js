@@ -152,7 +152,7 @@ router.post("/transfer", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        let amount = BigInt(req.body.amount) * usdtDecimal;
+        let amount = BigInt(tronWebInst.toSun(req.body.amount));
         if (
             !tronWebInst.isAddress(fromAddress) ||
             !tronWebInst.isAddress(toAddress)
