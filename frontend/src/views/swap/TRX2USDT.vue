@@ -29,7 +29,7 @@
         </template>
       </van-field>
       <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="swap_etimated">
-        大概需要消耗 {{ swap_fee }} 个TRX, 获得 {{ tokenGot }} 个TRX
+        大概需要消耗 {{ swap_fee }} 个TRX, 获得 {{ tokenGot }} 个USDT
       </van-notice-bar>
 
       <div style="margin: 16px 0">
