@@ -88,6 +88,8 @@ import { useRouter } from 'vue-router'
 import { biometry, backButton } from '@telegram-apps/sdk'
 import Password from '@/components/wallet/Password.vue'
 import request from '@/common/request'
+import { getToken, setToken } from '@/common/session'
+import { setPending2FA } from '@/common/pending-2fa'
 
 const router = useRouter()
 const user = ref(null)
@@ -97,7 +99,6 @@ const show = ref(false)
 const hasPassword = ref(false)
 const loading = ref(false)
 const showPassword = ref(false)
-const localToken = ref(null)
 const enable2fa = ref(false)
 const loading2fa = ref(false)
 const show2FACode = ref(false)
@@ -147,7 +148,6 @@ onMounted(async () => {
     hasPassword.value = localStorage.getItem('hasPassword')
       ? localStorage.getItem('hasPassword') == 'true'
       : false
-    localToken.value = localStorage.getItem('token') ? localStorage.getItem('token') : null
     user.value = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null
     if (user.value && user.value.id) {
       enableBio.value = localStorage.getItem(`${user.value.id}:biometric`)
@@ -158,6 +158,8 @@ onMounted(async () => {
     if (backButton.isMounted()) {
       backButton.onClick(backListener)
       backButton.show()
+    }
+    if (biometry.isSupported()) {
       await biometry.mount()
     }
   } catch (error) {
@@ -231,7 +233,7 @@ const on2FA = async () => {
         return router.replace({ name: 'Login' })
       } else if (!res.code) {
         // 跳转到绑定页面
-        localStorage.setItem('otpauthUrl', res.data.otpauthUrl)
+        setPending2FA(res.data.otpauthUrl)
         router.push({ name: 'Enable2FA' })
         return
       } else {
@@ -305,7 +307,7 @@ const onUnBind = async (code) => {
 const onBiometric = async () => {
   try {
     loading.value = true
-    if (!localToken.value || !user.value) {
+    if (!getToken() || !user.value) {
       loading.value = false
       return showToast({
         message: '登录信息异常',
@@ -320,7 +322,7 @@ const onBiometric = async () => {
         position: 'bottom'
       })
     }
-    if (!biometry.isSupported()) {
+    if (enableBio.value && !biometry.isSupported()) {
       loading.value = false
       showToast({
         message: '当前设备没有生物识别功能',
@@ -360,60 +362,45 @@ const onPassword = async (password) => {
   try {
     showPassword.value = false
     if (passwordAction == 'bio') {
-      let res = await request('/api/user/verify', 'POST', {
-        password: password
-      })
-      if (res.code && res.type == 'login') {
-        loading.value = false
-        return router.replace({ name: 'Login' })
-      } else if (!res.code) {
-        if (!res.data.verified) {
-          enableBio.value = !enableBio.value
-          showToast({
-            message: '密码错误',
-            position: 'bottom'
-          })
-          loading.value = false
-          return
+      let saved = {}
+      if (biometry.isSupported()) {
+        try {
+          const { status, token } = await biometry.authenticate({ reason: '管理生物识别凭据' })
+          if (enableBio.value && status !== 'authorized') throw new Error('生物识别验证未完成')
+          if (status === 'authorized' && token) saved = JSON.parse(token)
+        } catch (error) {
+          if (enableBio.value) throw error
         }
-        // 取回全部用户的token
-        const { status, token } = await biometry.authenticate({
-          reason: '开启指纹/面容支付'
-        })
-        if (status !== 'authorized') {
-          // 取回失败
-          loading.value = false
-          enableBio.value = !enableBio.value
-          return
-        }
-        let userTokens = {}
-        if (token && token.length) {
-          userTokens = JSON.parse(token)
-        }
-        if (enableBio.value) {
-          userTokens[user.value.id] = { token: localToken.value }
-          let tokenTxt = JSON.stringify(userTokens)
-          await biometry.updateToken({
-            reason: '开启指纹/面容支付',
-            token: tokenTxt
-          })
-          localStorage.setItem(`${user.value.id}:biometric`, true)
-        } else {
-          delete userTokens[user.value.id]
-          let tokenTxt = JSON.stringify(userTokens)
-          await biometry.updateToken({
-            reason: '关闭指纹/面容支付',
-            token: tokenTxt
-          })
-          localStorage.setItem(`${user.value.id}:biometric`, false)
-        }
-      } else {
-        enableBio.value = !enableBio.value
-        showToast({
-          message: res.message,
-          position: 'bottom'
-        })
       }
+      // 旧版本保存过 API token，只保留新格式的设备凭据。
+      saved = Object.fromEntries(Object.entries(saved).filter(([, entry]) => entry?.secret))
+      const action = enableBio.value ? 'enable' : 'disable'
+      const res = await request(`/api/user/biometric/${action}`, 'POST', { password })
+      if (res.code) throw new Error(res.message)
+      setToken(res.data.token)
+      if (enableBio.value) saved[user.value.id] = { secret: res.data.secret }
+      else delete saved[user.value.id]
+      if (biometry.isSupported()) {
+        try {
+          const updateStatus = await biometry.updateToken({
+            reason: enableBio.value ? '开启指纹/面容登录' : '关闭指纹/面容登录',
+            token: Object.keys(saved).length ? JSON.stringify(saved) : ''
+          })
+          if (
+            updateStatus !==
+            (enableBio.value ? 'updated' : Object.keys(saved).length ? 'updated' : 'removed')
+          )
+            throw new Error('生物识别凭据未保存')
+        } catch (error) {
+          if (enableBio.value) {
+            const rollback = await request('/api/user/biometric/disable', 'POST', { password })
+            if (!rollback.code) setToken(rollback.data.token)
+            throw error
+          }
+          showToast('登录验证已关闭，但本机凭据清理失败')
+        }
+      }
+      localStorage.setItem(`${user.value.id}:biometric`, enableBio.value)
       loading.value = false
     } else if (passwordAction == 'reset') {
       let res = await request('/api/wallet/reset', 'POST', {

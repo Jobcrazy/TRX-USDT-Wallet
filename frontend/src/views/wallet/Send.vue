@@ -102,6 +102,7 @@ import { TronWeb } from 'tronweb'
 import request from '@/common/request'
 import utils from '@/common/utils'
 import Password from '@/components/wallet/Password.vue'
+import { toSun } from '@/common/amount'
 
 const router = useRouter()
 const wallet = ref(null)
@@ -118,7 +119,6 @@ const estimated = ref(false)
 const fee = ref(0)
 let trxBalance = 0
 const showPassword = ref(false)
-const localToken = ref(null)
 let code2fa = ref(null)
 let password = ref(null)
 const show2FACode = ref(false)
@@ -136,6 +136,8 @@ const onSelectConfirm = ({ selectedOptions }) => {
   showPicker.value = false
   subtype.value = selectedOptions[0].value
   subtypeTxt.value = selectedOptions[0].text
+  balance.value = 0
+  balanceAmount = 0
 
   // 获取余额
   if (subtype.value == 'trx') loadTron()
@@ -148,7 +150,6 @@ onMounted(async () => {
     wallet.value = localStorage.getItem('wallet')
       ? JSON.parse(localStorage.getItem('wallet'))
       : null
-    localToken.value = localStorage.getItem('token') ? localStorage.getItem('token') : null
     if (backButton.isMounted()) {
       backButton.onClick(backListener)
     }
@@ -242,16 +243,11 @@ const checkSecurity = async () => {
 const transfer = async () => {
   try {
     if (!(await checkSecurity())) return
-    let realAmount = parseFloat(amount.value)
     loading.value = true
-    if (subtype.value == 'trx') {
-      if (realAmount + parseFloat(fee.value) > balance.value)
-        realAmount -= realAmount + parseFloat(fee.value) - balance.value
-    }
     let res = await request(`/api/wallet/tron/${subtype.value}/transfer`, 'POST', {
       from: wallet.value.address,
       to: address_to.value,
-      amount: realAmount,
+      amount: amount.value,
       password: password.value,
       code: code2fa.value
     })
@@ -287,7 +283,7 @@ const enterHistory = (subtype) => {
   })
   wallet.value.trxAddr = tronWeb.address.toHex(wallet.value.address)
   wallet.value.subtype = subtype
-  wallet.value.balance = balance
+  wallet.value.balance = balance.value
   localStorage.setItem('wallet', JSON.stringify(wallet.value))
   switch (subtype) {
     case 'trx':
@@ -307,14 +303,11 @@ const onSubmit = async () => {
       fullHost: 'https://api.trongrid.io'
     })
     if (!tronWeb.isAddress(address_to.value)) return showToast('不是正确的Tron网络地址')
-    if (parseFloat(amount.value) > parseFloat(balanceAmount)) return showToast('余额不足')
+    const amountSun = toSun(amount.value)
+    if (amountSun.gt(toSun(balanceAmount, true))) return showToast('余额不足')
 
     if (!estimated.value) {
       return estimate()
-    }
-
-    if (fee.value == 0) {
-      return transfer()
     }
 
     loading.value = true
@@ -325,11 +318,13 @@ const onSubmit = async () => {
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      trxBalance = parseFloat(res.data.balance)
+      trxBalance = res.data.balance
+      const feeSun = toSun(fee.value, true)
+      const availableSun = toSun(trxBalance, true)
       if (subtype.value == 'trx') {
-        trxBalance -= parseFloat(fee.value)
-      }
-      if (parseFloat(fee.value) > trxBalance) {
+        if (amountSun.plus(feeSun).gt(availableSun))
+          return showToast({ message: '余额不足以支付转账金额和手续费', position: 'bottom' })
+      } else if (feeSun.gt(availableSun)) {
         return showToast({
           message: 'Gas不足, 请先充入更多TRX',
           position: 'bottom'
@@ -385,6 +380,7 @@ const loadTron = async () => {
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
+      if (subtype.value !== 'trx') return
       balance.value = utils.numFormat(res.data.balance)
       balanceAmount = res.data.balance
     } else {
@@ -404,12 +400,15 @@ const loadTron = async () => {
 
 const loadUSDT = async () => {
   try {
+    loading.value = true
     let res = await request('/api/wallet/tron/usdt/balance', 'POST', {
       address: wallet.value.address
     })
+    loading.value = false
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
+      if (subtype.value !== 'usdt') return
       balance.value = utils.numFormat(res.data.balance)
       balanceAmount = res.data.balance
     } else {
@@ -419,7 +418,8 @@ const loadUSDT = async () => {
       })
     }
   } catch (error) {
-    console.log(error)
+    loading.value = false
+    showToast({ message: error.message, position: 'bottom' })
   }
 }
 

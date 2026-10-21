@@ -1,4 +1,5 @@
 import { createWebHistory, createRouter } from 'vue-router'
+import { getToken } from '@/common/session'
 
 const Login = () => import('@/views/login/Login.vue')
 const Home = () => import('@/views/home/Home.vue')
@@ -99,6 +100,10 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to) => {
+  if (to.name !== 'Login' && !getToken()) return { name: 'Login' }
 })
 
 export default router

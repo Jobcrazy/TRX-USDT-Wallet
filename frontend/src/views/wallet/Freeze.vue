@@ -120,6 +120,7 @@ import { showToast } from 'vant'
 import request from '@/common/request'
 import utils from '@/common/utils'
 import Password from '@/components/wallet/Password.vue'
+import { toSun } from '@/common/amount'
 
 const router = useRouter()
 const wallet = ref(null)
@@ -270,10 +271,7 @@ const checkSecurity = async () => {
 const stake = async () => {
   try {
     if (!(await checkSecurity())) return
-    let realAmount = parseFloat(amount.value)
     loading.value = true
-    if (realAmount + parseFloat(fee.value) > balance.value)
-      realAmount -= realAmount + parseFloat(fee.value) - balance.value
     let res = await request(`/api/wallet/tron/stake/stake`, 'POST', {
       type: stakeType.value[0].value,
       purpose: purposeType.value[0].value,
@@ -310,12 +308,10 @@ const stake = async () => {
 
 const onSubmit = async () => {
   try {
+    const amountSun = toSun(amount.value)
+    if (amountSun.gt(balanceAmount)) return showToast('余额不足')
     if (!estimated.value) {
       return estimate()
-    }
-
-    if (fee.value == 0) {
-      return stake()
     }
 
     loading.value = true
@@ -326,8 +322,11 @@ const onSubmit = async () => {
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      trxBalance = parseFloat(res.data.balance)
-      if (parseFloat(fee.value) > trxBalance) {
+      trxBalance = res.data.balance
+      const liquidSun = toSun(trxBalance, true)
+      const feeSun = toSun(fee.value, true)
+      const requiredSun = stakeType.value[0].value === 'freeze' ? amountSun.plus(feeSun) : feeSun
+      if (requiredSun.gt(liquidSun)) {
         return showToast({
           message: 'Gas不足, 请先充入更多TRX',
           position: 'bottom'

@@ -59,7 +59,7 @@ module.exports = {
         message: "Wallet seed exists",
     },
     error_no_seed: {
-        code: 11,
+        code: 22,
         type: "no_seed",
         message: "No wallet seed",
     },
@@ -98,6 +98,11 @@ module.exports = {
         type: "pay_password",
         message: "Incorrect password",
     },
+    error_biometric_required: {
+        code: 21,
+        type: "biometric_required",
+        message: "Biometric authentication or payment password required",
+    },
     error_secret: {
         code: 19,
         type: "2fa_bind",
@@ -109,7 +114,7 @@ module.exports = {
         message: "Invalid 2FA Code",
     },
     error_approve: {
-        code: 20,
+        code: 23,
         type: "approve",
         message: "Insufficient approved amount",
     },

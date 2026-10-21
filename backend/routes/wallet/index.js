@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const bip39 = require("bip39");
-const HDKey = require("hdkey");
 const utils = require("../../common/utils");
 const auth = require("../../common/auth");
 const errorCode = require("../../common/errorCode");
+const { checkPwd } = require("../../common/payPwd");
 const User = require("../../model/user");
 const Wallet = require("../../model/wallet");
 
@@ -13,6 +13,8 @@ router.post("/create", auth, async (req, res, next) => {
         const user = await utils.GetCurUser(req);
         if (user && user.seed && user.seed.length)
             return utils.SendError(res, errorCode.error_seed);
+        if (typeof req.body.mnemonic !== "string")
+            return utils.SendError(res, errorCode.error_lack_param);
         const mnemonic = req.body.mnemonic
             .replace(/[\r\n]+/g, " ") // 将换行符替换为空格
             .replace(/\s+/g, " ") // 将多个空格替换为一个空格
@@ -42,11 +44,11 @@ router.post("/create", auth, async (req, res, next) => {
 router.post("/reset", auth, async (req, res, next) => {
     try {
         let user = await utils.GetCurUser(req);
-        if (user.password != req.body.password)
+        if (!(await checkPwd(user, req.body.password, true)))
             return utils.SendError(res, errorCode.error_credential);
         // 删除全部关联的子账户
         await Wallet.destroy({ where: { userId: user.id } });
-        // 清空seed和mnemonic
+        // Preserve the seed if wallet deletion fails, so addresses can be derived again.
         await User.update(
             { seed: null, mnemonic: null },
             { where: { id: user.id } }

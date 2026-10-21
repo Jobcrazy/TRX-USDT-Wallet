@@ -7,6 +7,7 @@
 var app = require("./app");
 var debug = require("debug")("contract:server");
 var http = require("http");
+var syncModels = require("./common/syncModels");
 
 /**
  * Get port from environment and store in Express.
@@ -25,7 +26,12 @@ var server = http.createServer(app);
  * Listen on provided port, on all network interfaces.
  */
 
-server.listen(port);
+syncModels()
+    .then(() => server.listen(port))
+    .catch((error) => {
+        console.error("Database initialization failed", error);
+        process.exit(1);
+    });
 server.on("error", onError);
 server.on("listening", onListening);
 

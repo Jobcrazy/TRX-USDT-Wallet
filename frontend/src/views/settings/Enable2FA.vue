@@ -13,8 +13,8 @@
       <canvas class="qrcode" ref="canvas" />
     </div>
     <div class="desc">您也可以复制下方地址并添加到验证器</div>
-    <div class="address_wrapper" v-if="wallet" @click="copyAddress">
-      <div class="address">{{ wallet.address }}</div>
+    <div class="address_wrapper" v-if="otpauthUrl" @click="copyAddress">
+      <div class="address">{{ otpauthUrl }}</div>
       <div class="copy">
         <van-icon name="notes-o" size="1.5rem" color="#c0c0c0" />
       </div>
@@ -51,9 +51,10 @@ import google from '@/assets/icons/google.svg'
 import microsoft from '@/assets/icons/microsoft.svg'
 import Password from '@/components/wallet/Password.vue'
 import request from '@/common/request'
+import { getPending2FA, setPending2FA } from '@/common/pending-2fa'
 
 const router = useRouter()
-const canvas = ref('null')
+const canvas = ref(null)
 const otpauthUrl = ref(null)
 const showPassword = ref(false)
 const loading = ref(false)
@@ -67,7 +68,12 @@ onMounted(() => {
     backButton.onClick(backListener)
   }
   // 读取钱包信息
-  otpauthUrl.value = localStorage.getItem('otpauthUrl') ? localStorage.getItem('otpauthUrl') : null
+  otpauthUrl.value = getPending2FA()
+  if (!otpauthUrl.value) {
+    router.replace({ name: 'Settings' })
+    return
+  }
+  if (!otpauthUrl.value) return
   QRCode.toCanvas(
     canvas.value,
     otpauthUrl.value,
@@ -81,12 +87,12 @@ onMounted(() => {
     },
     function (error) {
       if (error) console.error(error)
-      console.log('success!')
     }
   )
 })
 
 onUnmounted(() => {
+  setPending2FA(null)
   if (backButton.isMounted()) {
     backButton.offClick(backListener)
   }
@@ -94,9 +100,9 @@ onUnmounted(() => {
 
 const copyAddress = async () => {
   try {
-    copy(otpauthUrl.value.address)
+    if (!copy(otpauthUrl.value)) throw new Error('复制失败')
     showToast({
-      message: '地址已复制到剪贴板',
+      message: '验证器地址已复制到剪贴板',
       position: 'bottom'
     })
   } catch (error) {
@@ -124,6 +130,7 @@ const onBind = async (code) => {
         position: 'bottom'
       })
       localStorage.setItem('enable2fa', true)
+      setPending2FA(null)
       return router.back()
     } else {
       if (res.type == '2fa_secret') {

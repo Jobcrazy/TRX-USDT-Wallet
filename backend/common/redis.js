@@ -1,6 +1,7 @@
 const config = require("config");
 const Redis = require("ioredis");
 
+let config_redis;
 if (process.env.PHASE === "production")
     config_redis = config.get("production.db.redis");
 else config_redis = config.get("development.db.redis");

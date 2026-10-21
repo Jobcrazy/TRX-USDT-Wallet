@@ -1,9 +1,7 @@
 const express = require("express");
-const hdkey = require("hdkey");
 const auth = require("../../../common/auth");
 const utils = require("../../../common/utils");
 const tronWeb = require("../../../blockchains/tron");
-const usdt = require("../../../blockchains/tron/tokens/usdt");
 const Wallet = require("../../../model/wallet");
 const errorCode = require("../../../common/errorCode");
 const router = express.Router();
@@ -22,10 +20,11 @@ router.post("/create", auth, async (req, res, next) => {
         });
         if (count >= 100)
             return utils.SendError(res, errorCode.error_too_many_wallet);
-        const hdnode = hdkey.fromMasterSeed(Buffer.from(user.seed, "hex"));
+        const { HDKey } = await import("@scure/bip32");
+        const hdnode = HDKey.fromMasterSeed(Buffer.from(user.seed, "hex"));
         const path = `m/44'/195'/0'/0/${count}`;
         const key = hdnode.derive(path);
-        const privateKey = key.privateKey.toString("hex");
+        const privateKey = Buffer.from(key.privateKey).toString("hex");
         // 从私钥生成钱包地址
         const address = tronWeb.getTronWeb().address.fromPrivateKey(privateKey);
         if (address === false) return utils.SendError(res);
@@ -36,10 +35,13 @@ router.post("/create", auth, async (req, res, next) => {
             address,
             account: 0,
             address_index: count,
-            privateKey: key.privateKey.toString("hex"),
-            publicKey: key.publicKey.toString("hex"),
+            privateKey,
+            publicKey: Buffer.from(key.publicKey).toString("hex"),
         });
-        utils.SendResult(res, { wallet });
+        const publicWallet = wallet.toJSON();
+        delete publicWallet.privateKey;
+        delete publicWallet.publicKey;
+        utils.SendResult(res, { wallet: publicWallet });
     } catch (error) {
         utils.SendError(res, error);
     }
@@ -48,7 +50,7 @@ router.post("/create", auth, async (req, res, next) => {
 router.post("/rename", auth, async (req, res, next) => {
     try {
         const user = await utils.GetCurUser(req);
-        let wallet = Wallet.update(
+        const [updated] = await Wallet.update(
             { alias: req.body.alias },
             {
                 where: {
@@ -57,6 +59,7 @@ router.post("/rename", auth, async (req, res, next) => {
                 },
             }
         );
+        if (!updated) return utils.SendError(res, errorCode.error_address);
         utils.SendResult(res);
     } catch (error) {
         utils.SendError(res, error);
@@ -65,9 +68,15 @@ router.post("/rename", auth, async (req, res, next) => {
 
 router.post("/list", auth, async (req, res, next) => {
     try {
-        let page = req.body.page ? req.body.page : 1;
-        let limit = req.body.limit ? req.body.limit : 20;
-        let offset = (page - 1) * limit;
+        const page = Number(req.body.page || 1);
+        const requestedLimit = Number(req.body.limit || 20);
+        if (!Number.isSafeInteger(page) || page < 1 ||
+            !Number.isSafeInteger(requestedLimit) || requestedLimit < 1)
+            return utils.SendError(res, errorCode.error_form);
+        const limit = Math.min(requestedLimit, 100);
+        const offset = (page - 1) * limit;
+        if (!Number.isSafeInteger(offset))
+            return utils.SendError(res, errorCode.error_form);
 
         const user = await utils.GetCurUser(req);
         if (!user.seed || !user.seed.length)

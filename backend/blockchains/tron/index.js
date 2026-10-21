@@ -23,13 +23,15 @@ const tronWeb = {
         return await axios({
             method: "GET",
             url,
+            timeout: 10000,
             headers: {
                 Accept: "application/json",
+                ...config_tron.headers,
             },
             params: {
                 limit,
                 fingerprint,
-                // only_confirmed: true,
+                only_confirmed: true,
             },
         });
     },
@@ -38,8 +40,10 @@ const tronWeb = {
         return await axios({
             method: "GET",
             url,
+            timeout: 10000,
             headers: {
                 Accept: "application/json",
+                ...config_tron.headers,
             },
             params: {
                 contract_address,

@@ -43,7 +43,7 @@
         </template>
       </van-field>
       <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="swap_etimated">
-        大概需要消耗 {{ swap_fee }} 个TRX, 获得 {{ tokenGot }} 个TRX
+        预计消耗 {{ swap_fee }} 个TRX，最低获得 {{ tokenGot }} 个TRX
       </van-notice-bar>
 
       <div style="margin: 16px 0">
@@ -117,6 +117,7 @@ import { showToast } from 'vant'
 import { backButton } from '@telegram-apps/sdk'
 import Password from '@/components/wallet/Password.vue'
 import tether from '@/assets/icons/tether.svg'
+import { toSun } from '@/common/amount'
 
 const approved = ref(0)
 const wallet = ref(null)
@@ -290,7 +291,7 @@ const estimateApprove = async () => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       approve_etimated.value = true
-      approve_fee.value = parseFloat(res.data.cost).toFixed(2)
+      approve_fee.value = res.data.cost
     } else {
       showToast({
         message: res.message,
@@ -401,8 +402,8 @@ const estimateSwap = async () => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       swap_etimated.value = true
-      swap_fee.value = parseFloat(res.data.cost).toFixed(2)
-      tokenGot.value = parseFloat(res.data.amount).toFixed(2)
+      swap_fee.value = res.data.cost
+      tokenGot.value = res.data.amount
     } else {
       showToast({
         message: res.message,
@@ -426,6 +427,7 @@ const swap = async () => {
     let res = await request('/api/wallet/tron/swap/usdt2trx', 'POST', {
       address: wallet.value.address,
       amount: swapAmount.value,
+      minAmountOut: tokenGot.value,
       password: password.value,
       code: code2fa.value
     })
@@ -469,9 +471,15 @@ const swap = async () => {
 
 const onSwap = async () => {
   try {
+    const amountSun = toSun(swapAmount.value)
+    if (
+      amountSun.gt(toSun(realUsdtBalance.value, true)) ||
+      amountSun.gt(toSun(approved.value, true))
+    )
+      return showToast('余额或授权额度不足')
     verifyType = 'swap'
     if (!swap_etimated.value) return await estimateSwap()
-    if (realTrxBalance.value < swap_fee.value) {
+    if (toSun(realTrxBalance.value, true).lt(toSun(swap_fee.value, true))) {
       return showToast({
         message: 'Gas不足, 请先充一些TRX',
         position: 'bottom'

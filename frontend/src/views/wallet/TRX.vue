@@ -1,6 +1,6 @@
 <template>
   <van-notice-bar color="#1989fa" background="#ecf9ff" left-icon="info-o">
-    暂时只支持查看<span style="font-weight: bold"> 转账 </span>类型的交易记录
+    仅显示已确认的 TRX 转账
   </van-notice-bar>
   <div class="wrapper" v-if="wallet">
     <van-row class="listWapper">
@@ -18,8 +18,14 @@
       </div>
     </van-row>
     <div class="divider" />
-    <van-pull-refresh v-model="loading" @refresh="onRefresh" class="transations">
-      <van-list :loading="loading" :finished="finished" finished-text="没有更多了" @load="onLoad">
+    <van-pull-refresh v-model="refreshing" @refresh="onRefresh" class="transations">
+      <van-list
+        :loading="loading"
+        :finished="finished"
+        loading-text="正在筛选 TRX 转账..."
+        finished-text="没有更多了"
+        @load="onLoad"
+      >
         <div
           class="transation"
           v-for="(transaction, index) in transactions"
@@ -75,6 +81,7 @@
           </div>
           <div class="more"><van-icon name="arrow" color="#c0c0c0" /></div>
         </div>
+        <van-empty v-if="finished && !transactions.length" description="暂无符合条件的 TRX 转账" />
       </van-list>
     </van-pull-refresh>
   </div>
@@ -119,67 +126,62 @@ onMounted(() => {
   }
   // 读取钱包信息
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
+  loadTron()
 })
 
 onUnmounted(() => {
+  requestVersion++
   if (backButton.isMounted()) {
     backButton.offClick(backListener)
   }
 })
 
-let page = 1
-let limit = 20
 let fingerprint = undefined
-const onRefresh = () => {
-  page = 1
-  refreshing.value = true
-  loading.value = false
+let requestVersion = 0
+let isLoadingPage = false
+let nextRequestAt = 0
+const onRefresh = async () => {
+  requestVersion++
+  isLoadingPage = false
+  transactions.value = []
+  finished.value = false
   fingerprint = undefined
-  loadTron()
-  onLoad()
+  refreshing.value = true
+  loading.value = true
+  await Promise.all([loadTron(), onLoad()])
+  refreshing.value = false
 }
 
 const onLoad = async () => {
+  if (isLoadingPage || finished.value || !wallet.value) return
+  isLoadingPage = true
+  const version = requestVersion
   try {
     loading.value = true
-    let res = await request('/api/wallet/tron/trx/history', 'POST', {
+    const wait = Math.max(0, nextRequestAt - Date.now())
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait))
+    if (version !== requestVersion) return
+    nextRequestAt = Date.now() + 1000
+    const res = await request('/api/wallet/tron/trx/history', 'POST', {
       address: wallet.value.address,
-      fingerprint,
-      page,
-      limit
+      fingerprint
     })
-    refreshing.value = false
-    loading.value = false
-    let res_transactions = []
+    if (version !== requestVersion) return
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      for (let index = 0; index < res.data.transactions.length; index++) {
-        const transaction = res.data.transactions[index]
-        if (
-          transaction.raw_data &&
-          transaction.raw_data.contract[0].type == 'TransferContract' && //过滤其他类型
-          transaction.raw_data.contract[0].parameter.value.amount >= 1 * 10 ** 6 // 过滤小额
-        ) {
-          transaction.raw_data.contract[0].parameter.value.owner_address_trc =
-            tronWeb.address.fromHex(transaction.raw_data.contract[0].parameter.value.owner_address)
-          transaction.raw_data.contract[0].parameter.value.to_address_trc = tronWeb.address.fromHex(
-            transaction.raw_data.contract[0].parameter.value.to_address
-          )
-          res_transactions.push(transaction)
-        }
-      }
-      if (page == 1) transactions.value = res_transactions
-      else transactions.value = [...transactions.value, ...res_transactions]
-      if (res.data.transactions.length == 0 || !res.data.fingerprint) {
-        finished.value = true
-      }
-      fingerprint = res.data.fingerprint
-      page++
+      const nextTransactions = res.data.transactions.map((transaction) => {
+        const value = transaction.raw_data.contract[0].parameter.value
+        value.owner_address_trc = tronWeb.address.fromHex(value.owner_address)
+        value.to_address_trc = tronWeb.address.fromHex(value.to_address)
+        return transaction
+      })
+      transactions.value = [...transactions.value, ...nextTransactions]
+      const nextFingerprint = res.data.fingerprint
+      if (!nextFingerprint || nextFingerprint === fingerprint) finished.value = true
+      fingerprint = nextFingerprint
     } else {
-      refreshing.value = false
-      loading.value = false
-      finished.value = false
+      finished.value = true
       showToast({
         message: res.message,
         position: 'bottom'
@@ -187,13 +189,16 @@ const onLoad = async () => {
     }
   } catch (error) {
     console.log(error)
-    refreshing.value = false
-    loading.value = false
-    finished.value = true
-    showToast({
-      message: error.message,
-      position: 'bottom'
-    })
+    if (version === requestVersion) {
+      finished.value = true
+      showToast({ message: error.message, position: 'bottom' })
+    }
+  } finally {
+    nextRequestAt = Math.max(nextRequestAt, Date.now() + 1000)
+    if (version === requestVersion) {
+      isLoadingPage = false
+      loading.value = false
+    }
   }
 }
 
@@ -212,6 +217,7 @@ const viewDetail = (transaction) => {
 }
 
 const loadTron = async () => {
+  if (!wallet.value) return
   try {
     let res = await request('/api/wallet/tron/trx/balance', 'POST', {
       address: wallet.value.address

@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test",
     "preview": "vite preview",
     "start": "vite",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
+    "lint": "eslint src vite.config.js --ext .vue,.js,.jsx,.cjs,.mjs",
+    "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write src/",
     "prepare": "cd .. && husky install frontend/.husky"
   },
@@ -16,6 +18,7 @@
     "@telegram-apps/sdk": "^2.11.3",
     "axios": "^1.7.9",
     "copy-to-clipboard": "^3.3.3",
+    "decimal.js": "^10.6.0",
     "ethereum-cryptography": "^3.0.0",
     "qrcode": "^1.5.4",
     "tronweb": "^6.0.1",

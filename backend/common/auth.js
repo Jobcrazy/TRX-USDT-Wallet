@@ -15,8 +15,10 @@ module.exports = async function (req, res, next) {
                 token: req.headers.token,
             },
         });
-        if (!user) utils.SendError(res, error_code.error_login);
-        else next();
+        if (!user || !user.tokenExpiresAt || user.tokenExpiresAt <= new Date())
+            return utils.SendError(res, error_code.error_login);
+        req.user = user;
+        next();
     } catch (error) {
         utils.SendError(res, error);
     }

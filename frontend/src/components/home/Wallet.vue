@@ -66,6 +66,7 @@ let page = 1
 let limit = 20
 const onRefresh = () => {
   page = 1
+  finished.value = false
   refreshing.value = true
   loading.value = false
   onLoad()

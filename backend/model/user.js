@@ -1,5 +1,4 @@
 const { DataTypes, Sequelize } = require("sequelize");
-const { v4: uuidv4 } = require("uuid");
 const sequelize = require("../common/sequelize");
 
 const User = sequelize.define(
@@ -19,6 +18,14 @@ const User = sequelize.define(
             type: DataTypes.STRING(60),
             allowNull: false,
         },
+        tokenExpiresAt: {
+            type: DataTypes.DATE,
+            allowNull: true,
+        },
+        biometricSecretHash: {
+            type: DataTypes.STRING(64),
+            allowNull: true,
+        },
         mnemonic: {
             type: DataTypes.STRING(512),
             allowNull: true,
@@ -28,7 +35,7 @@ const User = sequelize.define(
             allowNull: true,
         },
         password: {
-            type: DataTypes.STRING(16),
+            type: DataTypes.STRING(128),
             allowNull: true,
         },
         secret: {
@@ -44,6 +51,5 @@ const User = sequelize.define(
         ],
     }
 );
-User.beforeCreate((user) => (user.id = uuidv4()));
 
 module.exports = User;

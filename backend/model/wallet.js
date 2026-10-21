@@ -1,5 +1,4 @@
 const { DataTypes, Sequelize } = require("sequelize");
-const { v4: uuidv4 } = require("uuid");
 const sequelize = require("../common/sequelize");
 
 const Wallet = sequelize.define(
@@ -53,6 +52,5 @@ const Wallet = sequelize.define(
         ],
     }
 );
-Wallet.beforeCreate((wallet) => (wallet.id = uuidv4()));
 
 module.exports = Wallet;

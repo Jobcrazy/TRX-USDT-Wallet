@@ -22,6 +22,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { backButton } from '@telegram-apps/sdk'
 import request from '@/common/request'
+import { setToken } from '@/common/session'
 
 const router = useRouter()
 const user = ref(null)
@@ -113,6 +114,8 @@ const onNewPassword = async (newVal) => {
         position: 'bottom'
       })
       localStorage.setItem('hasPassword', 'true')
+      if (user.value) localStorage.setItem(`${user.value.id}:biometric`, false)
+      setToken(res.data.token)
       return router.back()
     } else {
       oldPassword = null
@@ -153,6 +156,7 @@ const onRemovePassword = async (newVal) => {
       })
       localStorage.setItem('hasPassword', 'false')
       localStorage.setItem(`${user.value.id}:biometric`, false)
+      setToken(res.data.token)
       return router.back()
     } else {
       oldPassword = null
@@ -212,6 +216,8 @@ const onModifyPassword = async (newVal) => {
         position: 'bottom'
       })
       localStorage.setItem('hasPassword', 'true')
+      if (user.value) localStorage.setItem(`${user.value.id}:biometric`, false)
+      setToken(res.data.token)
       return router.back()
     } else {
       oldPassword = null

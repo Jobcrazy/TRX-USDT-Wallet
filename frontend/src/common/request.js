@@ -1,7 +1,8 @@
 import axios from 'axios'
+import { getToken } from './session'
 
 export default (url, method, data) => {
-  const token = localStorage.getItem('token') ? localStorage.getItem('token') : null
+  const token = getToken()
   return new Promise((resolve, reject) => {
     axios({
       method: method,

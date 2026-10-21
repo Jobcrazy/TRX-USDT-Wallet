@@ -1,6 +1,5 @@
 const express = require("express");
-const config = require("config");
-const otplib = require("otplib");
+const { checkOtp } = require("../../../../common/otp");
 const Decimal = require("decimal.js");
 const auth = require("../../../../common/auth");
 const utils = require("../../../../common/utils");
@@ -8,6 +7,8 @@ const tronWeb = require("../../../../blockchains/tron");
 const Wallet = require("../../../../model/wallet");
 const usdt = require("../../../../blockchains/tron/tokens/usdt");
 const errorCode = require("../../../../common/errorCode");
+const { checkPwd } = require("../../../../common/payPwd");
+const { positiveSun } = require("../../../../common/amount");
 const router = express.Router();
 
 const MAX_RESULT_SIZE_IN_TX = 75;
@@ -53,7 +54,7 @@ router.post("/estimate", auth, async (req, res, next) => {
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
 
         let toAddress = req.body.to;
-        let amount = BigInt(tronWebInst.toSun(req.body.amount));
+        let amount = positiveSun(req.body.amount);
         if (
             !tronWebInst.isAddress(fromAddress) ||
             !tronWebInst.isAddress(toAddress)
@@ -132,17 +133,13 @@ router.post("/transfer", auth, async (req, res, next) => {
         let toAddress = req.body.to;
         // 检查密码和secret
         const user = await utils.GetCurUser(req);
-        if (
-            user.password &&
-            user.password.length &&
-            req.body.password != user.password
-        ) {
+        if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
         }
         if (
             user.secret &&
             user.secret.length &&
-            !otplib.authenticator.check(req.body.code, user.secret)
+            !(await checkOtp(user.id, user.secret, req.body.code))
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
@@ -152,7 +149,7 @@ router.post("/transfer", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        let amount = BigInt(tronWebInst.toSun(req.body.amount));
+        let amount = positiveSun(req.body.amount);
         if (
             !tronWebInst.isAddress(fromAddress) ||
             !tronWebInst.isAddress(toAddress)
@@ -256,17 +253,13 @@ router.post("/approve", auth, async (req, res, next) => {
             return utils.SendError(res, errorCode.error_lack_param);
         // 检查密码和secret
         const user = await utils.GetCurUser(req);
-        if (
-            user.password &&
-            user.password.length &&
-            req.body.password != user.password
-        ) {
+        if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
         }
         if (
             user.secret &&
             user.secret.length &&
-            !otplib.authenticator.check(req.body.code, user.secret)
+            !(await checkOtp(user.id, user.secret, req.body.code))
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
@@ -276,7 +269,7 @@ router.post("/approve", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        const amountIn = BigInt(tronWebInst.toSun(amount));
+        const amountIn = positiveSun(amount);
         const functionSelector = "approve(address,uint256)";
         const parameter = [
             {
@@ -319,7 +312,7 @@ router.post("/approve/estimate", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        const amountIn = BigInt(tronWebInst.toSun(amount));
+        const amountIn = positiveSun(amount);
         const functionSelector = "approve(address,uint256)";
         const parameter = [
             {

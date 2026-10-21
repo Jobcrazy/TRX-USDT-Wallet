@@ -1,11 +1,14 @@
 const express = require("express");
 const { BigNumber } = require("tronweb");
-const otplib = require("otplib");
+const { checkOtp } = require("../../../../common/otp");
 const auth = require("../../../../common/auth");
 const utils = require("../../../../common/utils");
 const tronWeb = require("../../../../blockchains/tron");
 const Wallet = require("../../../../model/wallet");
 const errorCode = require("../../../../common/errorCode");
+const { checkPwd } = require("../../../../common/payPwd");
+const { positiveSun } = require("../../../../common/amount");
+const { showTrx } = require("../../../../common/trxTx");
 
 const router = express.Router();
 const MAX_RESULT_SIZE_IN_TX = 69;
@@ -45,7 +48,7 @@ router.post("/estimate", auth, async (req, res, next) => {
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
 
         let toAddress = req.body.to;
-        let amount = BigInt(tronWebInst.toSun(req.body.amount));
+        let amount = positiveSun(req.body.amount);
         if (
             !tronWebInst.isAddress(fromAddress) ||
             !tronWebInst.isAddress(toAddress)
@@ -110,17 +113,13 @@ router.post("/transfer", auth, async (req, res, next) => {
         let toAddress = req.body.to;
         // 检查密码和secret
         const user = await utils.GetCurUser(req);
-        if (
-            user.password &&
-            user.password.length &&
-            req.body.password != user.password
-        ) {
+        if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
         }
         if (
             user.secret &&
             user.secret.length &&
-            !otplib.authenticator.check(req.body.code, user.secret)
+            !(await checkOtp(user.id, user.secret, req.body.code))
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
@@ -130,7 +129,7 @@ router.post("/transfer", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        const amount = BigInt(tronWebInst.toSun(req.body.amount));
+        const amount = positiveSun(req.body.amount);
         if (
             !tronWebInst.isAddress(fromAddress) ||
             !tronWebInst.isAddress(toAddress)
@@ -168,15 +167,15 @@ router.post("/history", auth, async (req, res, next) => {
             where: { address, userId: user.id },
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
-        let txs = (await tronWeb.getHistory(address, fingerprint, 20)).data;
-        if (txs.success) {
-            return utils.SendResult(res, {
-                fingerprint: txs.meta.fingerprint,
-                transactions: txs.data,
-            });
-        }
+        const addressHex = tronWeb.getTronWeb(wallet.privateKey).address.toHex(address);
+        const txs = (await tronWeb.getHistory(address, fingerprint, 100)).data;
+        if (!txs.success) throw new Error("Failed to load TRX history");
+        const transactions = (txs.data || []).filter((tx) =>
+            showTrx(tx, addressHex)
+        );
         return utils.SendResult(res, {
-            transactions: [],
+            fingerprint: txs.meta?.fingerprint,
+            transactions,
         });
     } catch (error) {
         utils.SendError(res, error);

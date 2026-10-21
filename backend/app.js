@@ -3,7 +3,6 @@ const path = require("path");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan");
 const cron = require("./common/cron");
-const syncModels = require("./common/syncModels");
 const indexRouter = require("./routes/index");
 const userRouter = require("./routes/user");
 const walletRouter = require("./routes/wallet");
@@ -24,7 +23,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // Allow crossed domain requests
 app.all("*", function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "X-Requested-With");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Token, X-Requested-With");
     res.header("Access-Control-Allow-Methods", "PUT,POST,GET,DELETE,OPTIONS");
     if (req.method === "OPTIONS") {
         res.sendStatus(200);
@@ -32,9 +31,6 @@ app.all("*", function (req, res, next) {
         next();
     }
 });
-
-// Sync Models
-syncModels();
 
 // Define Routers
 app.use("/", indexRouter);

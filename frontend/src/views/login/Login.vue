@@ -5,25 +5,35 @@
   <van-empty v-if="loadFailed" :description="description">
     <van-button type="primary" @click="login()" v-if="!errCredential">重新加载</van-button>
   </van-empty>
+  <van-popup v-model:show="showRecoveryPassword" position="bottom" :style="{ height: '80%' }">
+    <Password
+      info="生物识别不可用，请输入支付密码"
+      @password="onRecoveryPassword"
+      @cancel="cancelRecovery"
+    />
+  </van-popup>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { retrieveLaunchParams, backButton, biometry } from '@telegram-apps/sdk'
+import { retrieveLaunchParams, biometry } from '@telegram-apps/sdk'
 import request from '@/common/request'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { TronWeb } from 'tronweb'
+import Password from '@/components/wallet/Password.vue'
+import { setToken } from '@/common/session'
 
 const router = useRouter()
 const loading = ref(false)
 const loadFailed = ref(false)
 const errCredential = ref(false)
 const description = ref('加载账户信息失败')
+const showRecoveryPassword = ref(false)
 
 onMounted(async () => {
   try {
-    if (backButton.isMounted() && isMobileOS()) {
+    if (isMobileOS() && biometry.isSupported()) {
       await biometry.mount()
     }
     login()
@@ -53,7 +63,18 @@ function isMobileOS() {
   return false
 }
 
-const login = async () => {
+const onRecoveryPassword = (password) => {
+  showRecoveryPassword.value = false
+  login(password)
+}
+
+const cancelRecovery = () => {
+  showRecoveryPassword.value = false
+  description.value = '登录需要生物识别或支付密码'
+  loadFailed.value = true
+}
+
+const login = async (recoveryPassword = null) => {
   try {
     const tronWeb = new TronWeb({
       fullHost: 'https://api.trongrid.io'
@@ -61,12 +82,45 @@ const login = async () => {
 
     // 用当前的用户信息去后台取token
     loading.value = true
+    loadFailed.value = false
+    setToken(null)
+    localStorage.removeItem('token')
     const { initData, initDataRaw } = retrieveLaunchParams()
     let res = await request('/api/user/login', 'POST', {
-      initData: initDataRaw
+      initData: initDataRaw,
+      recoveryPassword
     })
+    if (res.type === 'biometric_required' && !recoveryPassword) {
+      try {
+        if (biometry.isSupported() && (await biometry.requestAccess())) {
+          const { status, token } = await biometry.authenticate({ reason: '解锁钱包' })
+          if (status === 'authorized' && token) {
+            const saved = JSON.parse(token)
+            const secret = saved[initData.user.id]?.secret
+            if (secret) {
+              res = await request('/api/user/login', 'POST', {
+                initData: initDataRaw,
+                biometricSecret: secret
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.log(error)
+      }
+      if (res.type === 'biometric_required') {
+        loading.value = false
+        showRecoveryPassword.value = true
+        return
+      }
+    }
     if (res.code) {
       loading.value = false
+      if (recoveryPassword && res.type === 'pay_password') {
+        showRecoveryPassword.value = true
+        showToast('支付密码错误或尝试次数过多')
+        return
+      }
       loadFailed.value = true
       if (res.type == 'credential') {
         errCredential.value = true
@@ -78,9 +132,10 @@ const login = async () => {
       }
     }
     localStorage.setItem('user', JSON.stringify(initData.user))
-    localStorage.setItem('token', res.data.token)
+    setToken(res.data.token)
     localStorage.setItem('hasPassword', res.data.hasPassword)
     localStorage.setItem('enable2fa', res.data.enable2fa)
+    if (!res.data.biometricEnabled) localStorage.removeItem(`${initData.user.id}:biometric`)
     // 判断是否有启动参数，有则跳转到对应界面
     if (initData.startParam && initData.startParam.length) {
       let params = initData.startParam.split('_')
@@ -94,45 +149,8 @@ const login = async () => {
       return router.replace({ name: 'Shared' })
     }
     if (res.data.inited) {
-      const user = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null
-      const enableBio = localStorage.getItem(`${user.id}:biometric`)
-        ? localStorage.getItem(`${user.id}:biometric`) == 'true'
-        : false
-      if (!enableBio || !biometry.isSupported()) {
-        loading.value = false
-        return router.replace({ name: 'Home' })
-      }
-      if (!(await biometry.requestAccess())) {
-        biometry.openSettings()
-        loadFailed.value = true
-        loading.value = false
-        return
-      }
-      // 取回全部用户的token
-      const { status, token } = await biometry.authenticate({
-        reason: '开启指纹/面容支付'
-      })
-      if (status !== 'authorized') {
-        // 取回失败
-        loadFailed.value = true
-        loading.value = false
-        return
-      }
-      let userTokens = {}
-      if (token && token.length) {
-        userTokens = JSON.parse(token)
-        if (userTokens[user.id].token != res.data.token) {
-          loadFailed.value = true
-        } else {
-          loading.value = false
-          return router.replace({ name: 'Home' })
-        }
-      } else {
-        localStorage.removeItem(`${user.id}:biometric`)
-        loading.value = false
-        return router.replace({ name: 'Home' })
-      }
       loading.value = false
+      return router.replace({ name: 'Home' })
     } else {
       loading.value = false
       router.replace({ name: 'Create' })

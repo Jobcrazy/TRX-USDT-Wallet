@@ -1,16 +1,14 @@
 const express = require("express");
 const router = express.Router();
-const otplib = require("otplib");
+const { checkOtp } = require("../../../common/otp");
 const Decimal = require("decimal.js");
 const utils = require("../../../common/utils");
 const auth = require("../../../common/auth");
 const errorCode = require("../../../common/errorCode");
+const { checkPwd } = require("../../../common/payPwd");
+const { positiveSun } = require("../../../common/amount");
 const tronWeb = require("../../../blockchains/tron");
 const Wallet = require("../../../model/wallet");
-const swapFactory = require("../../../blockchains/tron/sunswap/factory");
-const swapPool = require("../../../blockchains/tron/sunswap/pool");
-const swapRouter = require("../../../blockchains/tron/sunswap/router");
-const usdt = require("../../../blockchains/tron/tokens/usdt");
 
 const MAX_RESULT_SIZE_IN_TX = 75;
 
@@ -22,19 +20,17 @@ router.post("/stake", auth, async (req, res, next) => {
         let amount = req.body.amount;
         if (!type || !purpose || !address || !amount)
             return utils.SendError(res, errorCode.error_lack_param);
+        if (!["freeze", "unfreeze"].includes(type) || !["ENERGY", "BANDWIDTH"].includes(purpose))
+            return utils.SendError(res, errorCode.error_form);
         // 检查密码和secret
         const user = await utils.GetCurUser(req);
-        if (
-            user.password &&
-            user.password.length &&
-            req.body.password != user.password
-        ) {
+        if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
         }
         if (
             user.secret &&
             user.secret.length &&
-            !otplib.authenticator.check(req.body.code, user.secret)
+            !(await checkOtp(user.id, user.secret, req.body.code))
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
@@ -45,7 +41,7 @@ router.post("/stake", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        amount = BigInt(tronWebInst.toSun(amount));
+        amount = positiveSun(amount);
         let tx = null;
         if (type == "freeze")
             tx = await tronWebInst.transactionBuilder.freezeBalanceV2(
@@ -80,13 +76,15 @@ router.post("/estimate", auth, async (req, res, next) => {
         let amount = req.body.amount;
         if (!type || !purpose || !address || !amount)
             return utils.SendError(res, errorCode.error_lack_param);
+        if (!["freeze", "unfreeze"].includes(type) || !["ENERGY", "BANDWIDTH"].includes(purpose))
+            return utils.SendError(res, errorCode.error_form);
         const user = await utils.GetCurUser(req);
         const wallet = await Wallet.findOne({
             where: { address: address, userId: user.id },
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        amount = BigInt(tronWebInst.toSun(amount));
+        amount = positiveSun(amount);
         let tx = null;
         if (type == "freeze")
             tx = await tronWebInst.transactionBuilder.freezeBalanceV2(

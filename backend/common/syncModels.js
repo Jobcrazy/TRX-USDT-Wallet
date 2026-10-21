@@ -18,6 +18,7 @@ async function syncModels() {
         console.log("Sync Model Complete!");
     } catch (err) {
         console.log(err);
+        throw err;
     }
 }
 

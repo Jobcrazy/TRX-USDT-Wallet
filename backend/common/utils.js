@@ -3,7 +3,6 @@ const path = require("path");
 const crypto = require("crypto");
 const error_code = require("./errorCode");
 const User = require("../model/user");
-const { v4: uuidv4 } = require("uuid");
 
 const Utils = {
     //Create time display
@@ -80,13 +79,11 @@ const Utils = {
     },
     // API send error response
     SendError: function (res, err) {
+        const expected = err && typeof err.code === "number" && err.type;
         let result = {
-            code: err && err.code ? err.code : error_code.error_unknown.code,
-            type: err && err.type ? err.type : error_code.error_unknown.type,
-            message:
-                err && err.message
-                    ? err.message
-                    : error_code.error_unknown.message,
+            code: expected ? err.code : error_code.error_unknown.code,
+            type: expected ? err.type : error_code.error_unknown.type,
+            message: expected ? err.message : error_code.error_unknown.message,
         };
         res.send(result);
     },
@@ -114,6 +111,7 @@ const Utils = {
         return c.digest("hex");
     },
     GetCurUser: async function (req) {
+        if (req.user) return req.user;
         return await User.findOne({
             where: {
                 token: req.headers.token,
