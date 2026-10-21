@@ -129,14 +129,8 @@ const cancel2FACode = () => {
 
 function isMobileOS() {
   const userAgent = navigator.userAgent
-  // 判断是否为 Android 系统
-  if (/Android/i.test(userAgent)) {
-    return true
-  }
-  // 判断是否为 iOS 系统
-  if (/iPhone|iPad|iPod/i.test(userAgent)) {
-    return true
-  }
+  if (/Android/i.test(userAgent)) return true
+  if (/iPhone|iPad|iPod/i.test(userAgent)) return true
   return false
 }
 
@@ -158,8 +152,6 @@ onMounted(async () => {
     if (backButton.isMounted()) {
       backButton.onClick(backListener)
       backButton.show()
-    }
-    if (biometry.isSupported()) {
       await biometry.mount()
     }
   } catch (error) {
@@ -322,21 +314,17 @@ const onBiometric = async () => {
         position: 'bottom'
       })
     }
-    if (enableBio.value && !biometry.isSupported()) {
+    if (!biometry.isSupported()) {
       loading.value = false
-      showToast({
-        message: '当前设备没有生物识别功能',
-        position: 'bottom'
-      })
       enableBio.value = false
+      showToast({ message: '当前 Telegram 版本不支持生物识别', position: 'bottom' })
       return
     }
     if (enableBio.value) {
-      // 开启生物识别
       if (!(await biometry.requestAccess())) {
-        // 没有权限
         loading.value = false
         enableBio.value = false
+        showToast({ message: '请在 Telegram 设置中允许生物识别', position: 'bottom' })
         biometry.openSettings()
         return
       }
@@ -352,7 +340,7 @@ const onBiometric = async () => {
     enableBio.value = false
     loading.value = false
     showToast({
-      message: '当前设备不支持生物识别功能',
+      message: '无法开启生物识别，请检查 Telegram 权限和系统设置',
       position: 'bottom'
     })
   }
@@ -367,7 +355,14 @@ const onPassword = async (password) => {
         try {
           const { status, token } = await biometry.authenticate({ reason: '管理生物识别凭据' })
           if (enableBio.value && status !== 'authorized') throw new Error('生物识别验证未完成')
-          if (status === 'authorized' && token) saved = JSON.parse(token)
+          if (status === 'authorized' && token) {
+            try {
+              const parsed = JSON.parse(token)
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) saved = parsed
+            } catch (_) {
+              // Older versions stored a plain session token here.
+            }
+          }
         } catch (error) {
           if (enableBio.value) throw error
         }
