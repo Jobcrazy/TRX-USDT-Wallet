@@ -9,9 +9,10 @@ const errorCode = require("../../../../common/errorCode");
 const { checkPwd } = require("../../../../common/payPwd");
 const { positiveSun } = require("../../../../common/amount");
 const { showTrx } = require("../../../../common/trxTx");
+const { estimateFee } = require("../../../../blockchains/tron/estimateFee");
+const config = require("config");
 
 const router = express.Router();
-const MAX_RESULT_SIZE_IN_TX = 69;
 
 router.post("/balance", auth, async (req, res, next) => {
     try {
@@ -55,28 +56,9 @@ router.post("/estimate", auth, async (req, res, next) => {
         )
             return utils.SendError(res, errorCode.error_invalid_address);
 
-        // 获取目前链上的参数
-        const resources = await tronWebInst.trx.getAccountResources(
-            fromAddress
-        );
-        const bwLeft =
-            (resources.freeNetLimit ? resources.freeNetLimit : 0) -
-            (resources.freeNetUsed ? resources.freeNetUsed : 0);
-        const chainParams = await tronWebInst.trx.getChainParameters();
-        const bwPrice = chainParams.find(
-            (param) => param.key === "getTransactionFee"
-        ).value;
-
-        // 计算转账费用
-        let cost = BigInt(0);
+        // Check whether the recipient account is active.
         const toAccount = await tronWebInst.trx.getAccount(toAddress);
-        if (!Object.keys(toAccount).length) {
-            // 如果对方地址没有激活，发送方需要支付1TRX的激活费用
-            // 并消耗0.1RTX抵扣带宽消耗的费用，不扣除已有带宽
-            cost += BigInt(tronWebInst.toSun(1.1));
-        }
-
-        // 创建交易数据并签名
+        const activatesAccount = !Object.keys(toAccount).length;
         const transaction = await tronWebInst.transactionBuilder.sendTrx(
             toAddress,
             amount,
@@ -84,20 +66,10 @@ router.post("/estimate", auth, async (req, res, next) => {
         );
         const signedTransaction = await tronWebInst.trx.sign(transaction);
 
-        // 计算交易的长度
-        let sigLen = 0;
-        for (let i = 0; i < signedTransaction.signature.length; i++) {
-            sigLen += signedTransaction.signature[i].length / 2;
-        }
-        const tsLen =
-            signedTransaction.raw_data_hex.length / 2 +
-            sigLen +
-            MAX_RESULT_SIZE_IN_TX;
-
-        // 计算交易费用，如果发送方的可用带宽不够，则烧掉TRX作为交易费
-        if (bwLeft < tsLen) {
-            cost += BigInt(tsLen * bwPrice);
-        }
+        // Account activation uses on-chain creation fees and its dedicated bandwidth rule.
+        const cost = await estimateFee(tronWebInst, fromAddress, signedTransaction, {
+            kind: "trx", activatesAccount,
+        });
 
         return utils.SendResult(res, {
             cost: tronWebInst.fromSun(cost),
@@ -111,7 +83,7 @@ router.post("/transfer", auth, async (req, res, next) => {
     try {
         let fromAddress = req.body.from;
         let toAddress = req.body.to;
-        // 检查密码和secret
+        // Verify the payment password and 2FA secret
         const user = await utils.GetCurUser(req);
         if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
@@ -123,7 +95,7 @@ router.post("/transfer", auth, async (req, res, next) => {
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
-        // 转账
+        // Transfer
         const wallet = await Wallet.findOne({
             where: { address: fromAddress, userId: user.id },
         });
@@ -136,7 +108,7 @@ router.post("/transfer", auth, async (req, res, next) => {
         )
             return utils.SendError(res, errorCode.error_invalid_address);
 
-        // 创建交易数据并签名交易
+        // Build and sign the transaction
         const transaction = await tronWebInst.transactionBuilder.sendTrx(
             toAddress,
             amount,
@@ -144,7 +116,7 @@ router.post("/transfer", auth, async (req, res, next) => {
         );
         const signedTransaction = await tronWebInst.trx.sign(transaction);
 
-        // 广播交易到区块链上
+        // Broadcast the transaction
         const broadcast = await tronWebInst.trx.sendRawTransaction(
             signedTransaction
         );
@@ -168,7 +140,7 @@ router.post("/history", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const addressHex = tronWeb.getTronWeb(wallet.privateKey).address.toHex(address);
-        const txs = (await tronWeb.getHistory(address, fingerprint, 100)).data;
+        const txs = (await tronWeb.getHistory(address, fingerprint, config.get("wallet.trx_history_page_size"))).data;
         if (!txs.success) throw new Error("Failed to load TRX history");
         const transactions = (txs.data || []).filter((tx) =>
             showTrx(tx, addressHex)

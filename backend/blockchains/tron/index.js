@@ -23,7 +23,7 @@ const tronWeb = {
         return await axios({
             method: "GET",
             url,
-            timeout: 10000,
+            timeout: config.get("http.tron_history_timeout_ms"),
             headers: {
                 Accept: "application/json",
                 ...config_tron.headers,
@@ -40,7 +40,7 @@ const tronWeb = {
         return await axios({
             method: "GET",
             url,
-            timeout: 10000,
+            timeout: config.get("http.tron_history_timeout_ms"),
             headers: {
                 Accept: "application/json",
                 ...config_tron.headers,

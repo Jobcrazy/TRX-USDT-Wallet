@@ -1,13 +1,13 @@
 <template>
   <van-notice-bar color="#1989fa" background="#ecf9ff" left-icon="info-o">
-    仅显示已确认的 TRX 转账
+    {{ $t('history.confirmedOnly') }}
   </van-notice-bar>
   <div class="wrapper" v-if="wallet">
     <van-row class="listWapper">
       <div class="item">
         <div class="left">
           <van-image :src="tron" class="logo">
-            <template #error>加载失败</template>
+            <template #error>{{ $t('common.failedToLoad') }}</template>
           </van-image>
           <div class="name">{{ wallet.subtype == 'trx' ? 'Tron' : 'Tether' }}</div>
         </div>
@@ -22,8 +22,8 @@
       <van-list
         :loading="loading"
         :finished="finished"
-        loading-text="正在筛选 TRX 转账..."
-        finished-text="没有更多了"
+        :loading-text="$t('history.filteringTrx')"
+        :finished-text="$t('history.end')"
         @load="onLoad"
       >
         <div
@@ -45,8 +45,8 @@
               <div>
                 {{
                   transaction.raw_data.contract[0].parameter.value.to_address === wallet.trxAddr
-                    ? '收到'
-                    : '转出'
+                    ? $t('history.received')
+                    : $t('history.sent')
                 }}
               </div>
               <div class="amount">
@@ -64,8 +64,8 @@
               <div class="address">
                 {{
                   transaction.raw_data.contract[0].parameter.value.to_address === wallet.trxAddr
-                    ? '从: '
-                    : '到: '
+                    ? $t('history.fromLabel')
+                    : $t('history.toLabel')
                 }}
 
                 {{
@@ -81,7 +81,7 @@
           </div>
           <div class="more"><van-icon name="arrow" color="#c0c0c0" /></div>
         </div>
-        <van-empty v-if="finished && !transactions.length" description="暂无符合条件的 TRX 转账" />
+        <van-empty v-if="finished && !transactions.length" :description="$t('history.emptyTrx')" />
       </van-list>
     </van-pull-refresh>
   </div>
@@ -119,12 +119,12 @@ function truncate(str) {
 }
 
 onMounted(() => {
-  // 显示后退按钮
+  // Show the back button
   if (backButton.isMounted()) {
     backButton.show()
     backButton.onClick(backListener)
   }
-  // 读取钱包信息
+  // Load wallet information
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
   loadTron()
 })

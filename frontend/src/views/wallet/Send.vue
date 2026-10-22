@@ -7,14 +7,14 @@
           is-link
           readonly
           name="picker"
-          label="代币"
-          placeholder="请选择代币代币类型"
+          :label="$t('transfer.token')"
+          :placeholder="$t('transfer.selectToken')"
           @click="showPicker = true"
-          :rules="[{ required: true, message: '请选择代币代币类型' }]"
+          :rules="[{ required: true, message: $t('transfer.selectToken') }]"
           :disabled="loading"
         >
           <template #button>
-            <span v-if="subtype">余额: {{ balance }}</span>
+            <span v-if="subtype">{{ $t('common.balance') }} {{ balance }}</span>
           </template>
         </van-field>
         <van-popup :show="showPicker && !loading" destroy-on-close position="bottom">
@@ -29,24 +29,24 @@
         <van-field
           v-model="amount"
           type="number"
-          label="数量"
-          placeholder="请输入代币数量"
-          :rules="[{ required: true, message: '请输入代币数量' }]"
+          :label="$t('common.amount')"
+          :placeholder="$t('common.enterAmount')"
+          :rules="[{ required: true, message: $t('common.enterAmount') }]"
           :disabled="loading"
         >
           <template #button>
-            <span @click="amount = balanceAmount">全部</span>
+            <span @click="amount = balanceAmount">{{ $t('common.all') }}</span>
           </template>
         </van-field>
         <van-field
           v-model="address_to"
           rows="3"
-          label="地址"
+          :label="$t('transfer.address')"
           type="textarea"
-          placeholder="请输入地址或扫描二维码"
+          :placeholder="$t('transfer.enterAddress')"
           show-word-limit
           maxlength="34"
-          :rules="[{ required: true, message: '请输入地址或扫描二维码' }]"
+          :rules="[{ required: true, message: $t('transfer.enterAddress') }]"
           :disabled="loading"
         >
           <template #button>
@@ -57,7 +57,7 @@
 
       <div style="margin: 16px" v-if="estimated">
         <van-notice-bar color="#1989fa" background="#ecf9ff" left-icon="info-o">
-          这次转账需要消耗大概 {{ fee }} 个TRX
+          {{ $t('transfer.transferFeeEstimate', { fee }) }}
         </van-notice-bar>
       </div>
 
@@ -69,7 +69,7 @@
           :loading="loading"
           :disabled="loading || balance == 0"
         >
-          {{ estimated ? '提交转账请求' : '估算转账费用' }}
+          {{ estimated ? $t('transfer.submitTransfer') : $t('transfer.estimateFee') }}
         </van-button>
       </div>
     </van-form>
@@ -89,11 +89,13 @@
     position="bottom"
     :style="{ height: '80%' }"
   >
-    <Password @password="on2FACode" info="请输入验证器上的数字" @cancel="cancel2FACode" />
+    <Password @password="on2FACode" :info="$t('common.enterOtp')" @cancel="cancel2FACode" />
   </van-popup>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { backButton, qrScanner } from '@telegram-apps/sdk'
@@ -103,6 +105,8 @@ import request from '@/common/request'
 import utils from '@/common/utils'
 import Password from '@/components/wallet/Password.vue'
 import { toSun } from '@/common/amount'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
 const wallet = ref(null)
@@ -139,14 +143,14 @@ const onSelectConfirm = ({ selectedOptions }) => {
   balance.value = 0
   balanceAmount = 0
 
-  // 获取余额
+  // Get the balance
   if (subtype.value == 'trx') loadTron()
   if (subtype.value == 'usdt') loadUSDT()
 }
 
 onMounted(async () => {
   try {
-    // 读取钱包信息
+    // Load wallet information
     wallet.value = localStorage.getItem('wallet')
       ? JSON.parse(localStorage.getItem('wallet'))
       : null
@@ -208,7 +212,7 @@ const getSecurity = async () => {
   }
 }
 
-// 返回false则停止支付
+// Return false to stop the payment
 const checkSecurity = async () => {
   try {
     const security = await getSecurity()
@@ -216,7 +220,7 @@ const checkSecurity = async () => {
     const enable2fa = security.secret
 
     if (!hasPassword && !enable2fa) {
-      // 没有开启任何安全措施则直接转账
+      // Proceed when no payment protection is enabled
       return true
     }
     if (hasPassword && !password.value) {
@@ -302,9 +306,9 @@ const onSubmit = async () => {
     const tronWeb = new TronWeb({
       fullHost: 'https://api.trongrid.io'
     })
-    if (!tronWeb.isAddress(address_to.value)) return showToast('不是正确的Tron网络地址')
+    if (!tronWeb.isAddress(address_to.value)) return showToast(t('transfer.invalidAddress'))
     const amountSun = toSun(amount.value)
-    if (amountSun.gt(toSun(balanceAmount, true))) return showToast('余额不足')
+    if (amountSun.gt(toSun(balanceAmount, true))) return showToast(t('common.insufficientBalance'))
 
     if (!estimated.value) {
       return estimate()
@@ -323,10 +327,10 @@ const onSubmit = async () => {
       const availableSun = toSun(trxBalance, true)
       if (subtype.value == 'trx') {
         if (amountSun.plus(feeSun).gt(availableSun))
-          return showToast({ message: '余额不足以支付转账金额和手续费', position: 'bottom' })
+          return showToast({ message: t('transfer.balanceAndFee'), position: 'bottom' })
       } else if (feeSun.gt(availableSun)) {
         return showToast({
-          message: 'Gas不足, 请先充入更多TRX',
+          message: t('common.trxFeeShortage'),
           position: 'bottom'
         })
       }
@@ -353,7 +357,7 @@ const scanQRCode = async () => {
     if (backButton.isMounted() && qrScanner.open.isSupported()) {
       qrScanner.isOpened() // false
       await qrScanner.open({
-        text: '扫描Tron/TRC20地址',
+        text: t('transfer.scanAddress'),
         onCaptured(qr) {
           if (tronWeb.isAddress(qr)) {
             address_to.value = qr

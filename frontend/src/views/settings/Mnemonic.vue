@@ -1,7 +1,7 @@
 <template>
   <div class="wrapper">
     <div v-if="!verified && !loading">
-      <!-- 密码输入框 -->
+      <!-- Password input -->
       <van-password-input
         :value="password"
         :focused="showKeyboard"
@@ -9,13 +9,10 @@
         :error-info="errorInfo"
         :info="info"
       />
-      <!-- 数字键盘 -->
+      <!-- Numeric keyboard -->
       <van-number-keyboard v-model="password" :show="showKeyboard" @blur="showKeyboard = false" />
     </div>
-    <van-cell-group
-      title="请用纸笔记录下列提示词，并确保不会泄露或丢失"
-      v-if="verified && !loading"
-    >
+    <van-cell-group :title="$t('common.backupPhrase')" v-if="verified && !loading">
       <van-grid direction="horizontal" :column-num="mnemonic.length == 12 ? 2 : 3">
         <van-grid-item v-for="(word, index) in mnemonic" :key="index" :text="word">
           <template #icon> {{ index + 1 }}.&nbsp; </template>
@@ -25,7 +22,7 @@
     </van-cell-group>
   </div>
   <div class="loading" v-if="loading">
-    <van-loading size="24px" vertical>加载中...</van-loading>
+    <van-loading size="24px" vertical>{{ $t('security.loading') }}</van-loading>
   </div>
 </template>
 
@@ -68,7 +65,7 @@ onUnmounted(async () => {
 watch(password, (newVal) => {
   if (newVal != '') errorInfo.value = ''
   if (newVal.length === 6) {
-    // 获取并展示提示词
+    // Load and display the recovery phrase
     showMnemonic(newVal)
     password.value = ''
   }

@@ -1,13 +1,13 @@
 <template>
   <van-notice-bar color="#1989fa" background="#ecf9ff" left-icon="info-o">
-    暂时只支持查看<span style="font-weight: bold"> 转账 </span>类型的交易记录
+    {{ $t('history.transfersOnly') }}
   </van-notice-bar>
   <div class="wrapper" v-if="wallet">
     <van-row class="listWapper">
       <div class="item">
         <div class="left">
           <van-image :src="tether" class="logo">
-            <template #error>加载失败</template>
+            <template #error>{{ $t('common.failedToLoad') }}</template>
           </van-image>
           <div class="name">{{ 'Tether' }}</div>
         </div>
@@ -19,7 +19,12 @@
     </van-row>
     <div class="divider" />
     <van-pull-refresh v-model="loading" @refresh="onRefresh" class="transations">
-      <van-list :loading="loading" :finished="finished" finished-text="没有更多了" @load="onLoad">
+      <van-list
+        :loading="loading"
+        :finished="finished"
+        :finished-text="$t('history.end')"
+        @load="onLoad"
+      >
         <div
           class="transation"
           v-for="(transaction, index) in transactions"
@@ -33,7 +38,11 @@
           </div>
           <div class="detail">
             <div class="direction">
-              <div>{{ transaction.from === wallet.address ? '转出' : '收到' }}</div>
+              <div>
+                {{
+                  transaction.from === wallet.address ? $t('history.sent') : $t('history.received')
+                }}
+              </div>
               <div class="amount">
                 {{
                   utils.numFormat(
@@ -47,7 +56,10 @@
             </div>
             <div class="address_info">
               <div class="address">
-                {{ transaction.from === wallet.address ? '到: ' : '从: '
+                {{
+                  transaction.from === wallet.address
+                    ? $t('history.toLabel')
+                    : $t('history.fromLabel')
                 }}{{
                   transaction.from === wallet.address
                     ? truncate(transaction.to)
@@ -94,12 +106,12 @@ function truncate(str) {
 }
 
 onMounted(() => {
-  // 显示后退按钮
+  // Show the back button
   if (backButton.isMounted()) {
     backButton.show()
     backButton.onClick(backListener)
   }
-  // 读取钱包信息
+  // Load wallet information
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
 })
 

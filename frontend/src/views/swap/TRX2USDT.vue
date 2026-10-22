@@ -4,7 +4,7 @@
       <div class="item">
         <div class="left">
           <van-image :src="tron" class="logo">
-            <template #error>加载失败</template>
+            <template #error>{{ $t('common.failedToLoad') }}</template>
           </van-image>
           <div class="name">{{ 'Tron' }}</div>
         </div>
@@ -19,17 +19,23 @@
         v-model="swapAmount"
         type="number"
         :disabled="loading"
-        name="数量"
-        label="数量"
-        placeholder="请输入要兑换的TRX数量"
-        :rules="[{ required: true, message: '请输入要兑换的USDT数量' }]"
+        name="amount"
+        :label="$t('common.amount')"
+        :placeholder="$t('swap.enterTrx')"
+        :rules="[{ required: true, message: $t('swap.enterTrx') }]"
       >
         <template #button>
-          <span @click="swapAmount = realTrxBalance">全部</span>
+          <span @click="swapAmount = realTrxBalance">{{ $t('common.all') }}</span>
         </template>
       </van-field>
       <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="swap_etimated">
-        预计消耗 {{ swap_fee }} 个TRX，最低获得 {{ tokenGot }} 个USDT
+        {{
+          $t('swap.swapEstimate', {
+            fee: swap_fee,
+            amount: tokenGot,
+            token: 'USDT'
+          })
+        }}
       </van-notice-bar>
 
       <div style="margin: 16px 0">
@@ -40,7 +46,7 @@
           :loading="loading"
           :disabled="swapAmount == 0 || swapAmount > realTrxBalance"
         >
-          {{ swap_etimated ? '兑换成USDT' : '估算兑换费用' }}
+          {{ swap_etimated ? $t('swap.swapToUsdt') : $t('swap.estimateSwapFee') }}
         </van-button>
       </div>
     </van-form>
@@ -61,11 +67,13 @@
     position="bottom"
     :style="{ height: '80%' }"
   >
-    <Password @password="on2FACode" info="请输入验证器上的数字" @cancel="cancel2FACode" />
+    <Password @password="on2FACode" :info="$t('common.enterOtp')" @cancel="cancel2FACode" />
   </van-popup>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import request from '@/common/request'
 import utils from '@/common/utils'
@@ -75,6 +83,8 @@ import { backButton } from '@telegram-apps/sdk'
 import Password from '@/components/wallet/Password.vue'
 import tron from '@/assets/icons/tron.svg'
 import { toSun } from '@/common/amount'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const wallet = ref(null)
 const router = useRouter()
@@ -95,13 +105,13 @@ const backListener = () => {
 }
 
 onMounted(() => {
-  // 显示后退按钮
+  // Show the back button
   if (backButton.isMounted()) {
     backButton.show()
     backButton.onClick(backListener)
   }
 
-  // 读取钱包信息
+  // Load wallet information
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
   loadTron()
 })
@@ -144,7 +154,7 @@ const getSecurity = async () => {
   }
 }
 
-// 返回false则停止操作
+// Return false to stop the operation
 const checkSecurity = async () => {
   try {
     const security = await getSecurity()
@@ -152,7 +162,7 @@ const checkSecurity = async () => {
     const enable2fa = security.secret
 
     if (!hasPassword && !enable2fa) {
-      // 没有开启任何安全措施则直接转账
+      // Proceed when no payment protection is enabled
       return true
     }
     if (hasPassword && !password.value) {
@@ -227,7 +237,7 @@ const swap = async () => {
       swap_etimated.value = false
       router.back()
       showToast({
-        message: '兑换成功, 请稍后刷新',
+        message: t('swap.submitted'),
         duration: 5 * 1000,
         position: 'bottom'
       })
@@ -254,11 +264,12 @@ const swap = async () => {
 const onSwap = async () => {
   try {
     const amountSun = toSun(swapAmount.value)
-    if (amountSun.gt(toSun(realTrxBalance.value, true))) return showToast('余额不足')
+    if (amountSun.gt(toSun(realTrxBalance.value, true)))
+      return showToast(t('common.insufficientBalance'))
     if (!swap_etimated.value) return await estimateSwap()
     if (amountSun.plus(toSun(swap_fee.value, true)).gt(toSun(realTrxBalance.value, true))) {
       return showToast({
-        message: '余额不足以支付兑换金额和手续费',
+        message: t('swap.balanceAndFee'),
         position: 'bottom'
       })
     }

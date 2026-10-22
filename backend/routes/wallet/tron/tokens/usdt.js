@@ -1,6 +1,5 @@
 const express = require("express");
 const { checkOtp } = require("../../../../common/otp");
-const Decimal = require("decimal.js");
 const auth = require("../../../../common/auth");
 const utils = require("../../../../common/utils");
 const tronWeb = require("../../../../blockchains/tron");
@@ -8,11 +7,14 @@ const Wallet = require("../../../../model/wallet");
 const usdt = require("../../../../blockchains/tron/tokens/usdt");
 const errorCode = require("../../../../common/errorCode");
 const { checkPwd } = require("../../../../common/payPwd");
-const { positiveSun } = require("../../../../common/amount");
+const { positiveUnits, formatUnits } = require("../../../../common/amount");
+const { getTokenDecimals } = require("../../../../blockchains/tron/tokenDecimals");
+const config = require("config");
+const { estimateFee } = require("../../../../blockchains/tron/estimateFee");
 const router = express.Router();
 
-const MAX_RESULT_SIZE_IN_TX = 75;
-const usdtDecimal = BigInt(10 ** 6);
+const usdtDecimals = (inst) => getTokenDecimals(inst, tronWeb.getConfig().tokens.usdt, tronWeb.getConfig().rpc_url);
+const positiveUsdt = async (value, inst) => positiveUnits(value, await usdtDecimals(inst));
 
 router.post("/balance", auth, async (req, res, next) => {
     try {
@@ -33,7 +35,7 @@ router.post("/balance", auth, async (req, res, next) => {
         let result = {
             token: "usdt",
             address,
-            balance: Decimal(balance).div(Decimal(usdtDecimal)).toString(),
+            balance: formatUnits(balance, await usdtDecimals(tronWebInst)),
         };
         utils.SendResult(res, result);
     } catch (error) {
@@ -54,40 +56,21 @@ router.post("/estimate", auth, async (req, res, next) => {
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
 
         let toAddress = req.body.to;
-        let amount = positiveSun(req.body.amount);
         if (
             !tronWebInst.isAddress(fromAddress) ||
             !tronWebInst.isAddress(toAddress)
         )
             return utils.SendError(res, errorCode.error_invalid_address);
+        let amount = await positiveUsdt(req.body.amount, tronWebInst);
 
-        // 获取目前链上的参数
-        const resources = await tronWebInst.trx.getAccountResources(
-            fromAddress
-        );
-        const bwLeft =
-            (resources.freeNetLimit ? resources.freeNetLimit : 0) -
-            (resources.freeNetUsed ? resources.freeNetUsed : 0);
-        const enLeft =
-            (resources.EnergyLimit ? resources.EnergyLimit : 0) -
-            (resources.EnergyUsed ? resources.EnergyUsed : 0);
-        const chainParams = await tronWebInst.trx.getChainParameters();
-        const bwPrice = chainParams.find(
-            (param) => param.key === "getTransactionFee"
-        ).value;
-        const energyFee = chainParams.find(
-            (param) => param.key === "getEnergyFee"
-        ).value;
-
-        // 计算转账费用
-        let cost = BigInt(0);
+        // Check the recipient account status.
         const toAccount = await tronWebInst.trx.getAccount(toAddress);
         if (!Object.keys(toAccount).length) {
-            // 如果对方地址没有激活，阻止发送避免损失
+            // Reject transfers to inactive recipients to avoid losing tokens
             return utils.SendError(res, errorCode.error_inactivated_account);
         }
 
-        // 创建交易数据并签名交易
+        // Build and sign the transaction
         const functionSelector = "transfer(address,uint256)";
         const parameter = [
             { type: "address", value: toAddress },
@@ -101,23 +84,10 @@ router.post("/estimate", auth, async (req, res, next) => {
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
 
-        // 计算交易的长度
-        let sigLen = 0;
-        for (let i = 0; i < signedTx.signature.length; i++) {
-            sigLen += signedTx.signature[i].length / 2;
-        }
-        const tsLen =
-            signedTx.raw_data_hex.length / 2 + sigLen + MAX_RESULT_SIZE_IN_TX;
-
-        // 计算带宽消耗，如果发送方的可用带宽不够，则烧掉TRX作为交易费
-        if (bwLeft < tsLen) {
-            cost += BigInt(tsLen * bwPrice);
-        }
-
-        // 计算所需的能量价格，如果有能量，则优先从能量扣减
-        if (enLeft < tx.energy_used) {
-            cost += BigInt((tx.energy_used - enLeft) * energyFee);
-        }
+        // Estimate fees using current chain parameters and account resources.
+        const cost = await estimateFee(tronWebInst, fromAddress, signedTx, {
+            energyUsed: tx.energy_used,
+        });
 
         return utils.SendResult(res, {
             cost: tronWebInst.fromSun(cost),
@@ -131,7 +101,7 @@ router.post("/transfer", auth, async (req, res, next) => {
     try {
         let fromAddress = req.body.from;
         let toAddress = req.body.to;
-        // 检查密码和secret
+        // Verify the payment password and 2FA secret
         const user = await utils.GetCurUser(req);
         if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
@@ -143,26 +113,26 @@ router.post("/transfer", auth, async (req, res, next) => {
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
-        // 转账
+        // Transfer
         const wallet = await Wallet.findOne({
             where: { address: fromAddress, userId: user.id },
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        let amount = positiveSun(req.body.amount);
         if (
             !tronWebInst.isAddress(fromAddress) ||
             !tronWebInst.isAddress(toAddress)
         )
             return utils.SendError(res, errorCode.error_invalid_address);
+        let amount = await positiveUsdt(req.body.amount, tronWebInst);
 
-        // 如果对方地址没有激活，阻止发送避免损失
+        // Reject transfers to inactive recipients to avoid losing tokens
         const toAccount = await tronWebInst.trx.getAccount(toAddress);
         if (!Object.keys(toAccount).length) {
             return utils.SendError(res, errorCode.error_inactivated_account);
         }
 
-        // 创建交易数据并签名交易
+        // Build and sign the transaction
         const functionSelector = "transfer(address,uint256)";
         const parameter = [
             { type: "address", value: toAddress },
@@ -176,7 +146,7 @@ router.post("/transfer", auth, async (req, res, next) => {
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
 
-        // 广播交易到区块链上
+        // Broadcast the transaction
         const broadcast = await tronWebInst.trx.sendRawTransaction(signedTx);
         if (broadcast.result)
             return utils.SendResult(res, {
@@ -202,7 +172,7 @@ router.post("/history", auth, async (req, res, next) => {
                 address,
                 tronWeb.getConfig().tokens.usdt,
                 fingerprint,
-                20
+                config.get("wallet.history_page_size")
             )
         ).data;
         if (txs.success) {
@@ -238,7 +208,7 @@ router.post("/allowance", auth, async (req, res, next) => {
             .allowance(address, tronWeb.getConfig().sunswap.router)
             .call();
         return utils.SendResult(res, {
-            amount: tronWebInst.fromSun(allowance.remaining),
+            amount: formatUnits(allowance.remaining, await usdtDecimals(tronWebInst)),
         });
     } catch (error) {
         utils.SendError(res, error);
@@ -251,7 +221,7 @@ router.post("/approve", auth, async (req, res, next) => {
         const amount = req.body.amount;
         if (!address || !amount)
             return utils.SendError(res, errorCode.error_lack_param);
-        // 检查密码和secret
+        // Verify the payment password and 2FA secret
         const user = await utils.GetCurUser(req);
         if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
@@ -263,13 +233,13 @@ router.post("/approve", auth, async (req, res, next) => {
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
-        // 授信
+        // Approve allowance
         const wallet = await Wallet.findOne({
             where: { address: address, userId: user.id },
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        const amountIn = positiveSun(amount);
+        const amountIn = await positiveUsdt(amount, tronWebInst);
         const functionSelector = "approve(address,uint256)";
         const parameter = [
             {
@@ -288,7 +258,7 @@ router.post("/approve", auth, async (req, res, next) => {
             parameter
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
-        // 广播交易到区块链上
+        // Broadcast the transaction
         const broadcast = await tronWebInst.trx.sendRawTransaction(signedTx);
         if (broadcast.result)
             return utils.SendResult(res, {
@@ -312,7 +282,7 @@ router.post("/approve/estimate", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        const amountIn = positiveSun(amount);
+        const amountIn = await positiveUsdt(amount, tronWebInst);
         const functionSelector = "approve(address,uint256)";
         const parameter = [
             {
@@ -332,40 +302,10 @@ router.post("/approve/estimate", auth, async (req, res, next) => {
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
 
-        // 获取目前链上的参数
-        let cost = BigInt(0);
-        const resources = await tronWebInst.trx.getAccountResources(address);
-        const bwLeft =
-            (resources.freeNetLimit ? resources.freeNetLimit : 0) -
-            (resources.freeNetUsed ? resources.freeNetUsed : 0);
-        const enLeft =
-            (resources.EnergyLimit ? resources.EnergyLimit : 0) -
-            (resources.EnergyUsed ? resources.EnergyUsed : 0);
-        const chainParams = await tronWebInst.trx.getChainParameters();
-        const bwPrice = chainParams.find(
-            (param) => param.key === "getTransactionFee"
-        ).value;
-        const energyFee = chainParams.find(
-            (param) => param.key === "getEnergyFee"
-        ).value;
-
-        // 计算交易的长度
-        let sigLen = 0;
-        for (let i = 0; i < signedTx.signature.length; i++) {
-            sigLen += signedTx.signature[i].length / 2;
-        }
-        const tsLen =
-            signedTx.raw_data_hex.length / 2 + sigLen + MAX_RESULT_SIZE_IN_TX;
-
-        // 计算带宽消耗，如果发送方的可用带宽不够，则烧掉TRX作为交易费
-        if (bwLeft < tsLen) {
-            cost += BigInt(tsLen * bwPrice);
-        }
-
-        // 计算所需的能量价格，如果有能量，则优先从能量扣减
-        if (enLeft < tx.energy_used) {
-            cost += BigInt((tx.energy_used - enLeft) * energyFee);
-        }
+        // Estimate fees using current chain parameters and account resources.
+        const cost = await estimateFee(tronWebInst, address, signedTx, {
+            energyUsed: tx.energy_used,
+        });
 
         return utils.SendResult(res, {
             cost: tronWebInst.fromSun(cost),

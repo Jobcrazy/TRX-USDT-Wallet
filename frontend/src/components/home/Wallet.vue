@@ -9,18 +9,18 @@
         :clickable="true"
       />
     </van-list>
-    <van-empty v-if="!loading && !wallets.length" description="您还没有任何子账户"></van-empty>
-    <van-button type="primary" size="large" block @click="showCreate = true" :loading="loading"
-      >新建子账户</van-button
-    >
-    <van-row class="tip">新建子账户时，如果该账户已存在，则自动恢复</van-row>
+    <van-empty v-if="!loading && !wallets.length" :description="$t('wallet.empty')"></van-empty>
+    <van-button type="primary" size="large" block @click="showCreate = true" :loading="loading">{{
+      $t('wallet.newSubaccount')
+    }}</van-button>
+    <van-row class="tip">{{ $t('wallet.restoreHint') }}</van-row>
   </van-pull-refresh>
 
   <van-overlay :show="showCreate">
     <div class="wrapper" @click.stop>
       <div class="block">
         <div class="dlg_title">
-          <div class="title">创建子账户</div>
+          <div class="title">{{ $t('wallet.createSubaccount') }}</div>
           <div @click="showCreate = false"><van-icon name="cross" /></div>
         </div>
         <van-form @submit="onSubmit">
@@ -28,13 +28,13 @@
             <van-field
               v-model="alias"
               maxlength="10"
-              placeholder="子账户别名不能重复"
-              :rules="[{ required: true, message: '请填写账户别名' }]"
+              :placeholder="$t('wallet.uniqueAlias')"
+              :rules="[{ required: true, message: $t('wallet.enterAlias') }]"
             />
           </van-cell-group>
           <div style="margin: 16px">
             <van-button block type="primary" native-type="submit" :loading="loading">
-              创建
+              {{ $t('wallet.create') }}
             </van-button>
           </div>
         </van-form>

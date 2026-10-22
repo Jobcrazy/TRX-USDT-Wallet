@@ -11,17 +11,25 @@
     />
     <div class="actions">
       <van-grid direction="vertical" :column-num="4">
-        <van-grid-item icon="guide-o" text="发送" @click="router.push({ name: 'Send' })" />
-        <van-grid-item icon="down" text="接收" @click="router.push({ name: 'Receive' })" />
-        <van-grid-item icon="exchange" text="兑换" @click="showSwap = true" />
-        <van-grid-item icon="replay" text="刷新" @click="onRefresh" />
+        <van-grid-item
+          icon="guide-o"
+          :text="$t('wallet.send')"
+          @click="router.push({ name: 'Send' })"
+        />
+        <van-grid-item
+          icon="down"
+          :text="$t('wallet.receive')"
+          @click="router.push({ name: 'Receive' })"
+        />
+        <van-grid-item icon="exchange" :text="$t('wallet.swap')" @click="showSwap = true" />
+        <van-grid-item icon="replay" :text="$t('common.refresh')" @click="onRefresh" />
       </van-grid>
     </div>
     <van-row class="listWapper">
       <div class="item" @click="enterHistory('trx')">
         <div class="left">
           <van-image :src="tron" class="logo">
-            <template #error>加载失败</template>
+            <template #error>{{ $t('common.failedToLoad') }}</template>
           </van-image>
           <div class="name">TRX</div>
         </div>
@@ -33,7 +41,7 @@
       <div class="item" @click="enterHistory('usdt')">
         <div class="left">
           <van-image :src="tether" class="logo">
-            <template #error>加载失败</template>
+            <template #error>{{ $t('common.failedToLoad') }}</template>
           </van-image>
           <div class="name">USDT</div>
         </div>
@@ -47,13 +55,15 @@
   <van-action-sheet
     v-model:show="showSwap"
     :actions="swapActions"
-    cancel-text="取消"
+    :cancel-text="$t('common.cancel')"
     close-on-click-action
     @select="onSwapAction"
   />
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref } from 'vue'
 import { TronWeb } from 'tronweb'
 import { backButton } from '@telegram-apps/sdk'
@@ -64,6 +74,8 @@ import Card from '@/components/wallet/Card.vue'
 import { closeToast, showLoadingToast, showToast } from 'vant'
 import tron from '@/assets/icons/tron.svg'
 import tether from '@/assets/icons/tether.svg'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
 const wallet = ref(null)
@@ -77,15 +89,15 @@ const backListener = () => {
 }
 
 onMounted(() => {
-  // 显示后退按钮
+  // Show the back button
   if (backButton.isMounted()) {
     backButton.show()
     backButton.onClick(backListener)
   }
-  // 读取钱包信息
+  // Load wallet information
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
 
-  // 读各钱包的余额
+  // Load balances for each wallet
   loadTron()
   loadUSDT()
 })
@@ -94,7 +106,7 @@ const onRefresh = async () => {
   showLoadingToast({
     duration: 0,
     forbidClick: true,
-    message: '正在刷新...'
+    message: t('wallet.refreshing')
   })
   try {
     loading.value = true
@@ -177,8 +189,8 @@ const loadUSDT = async () => {
 
 const showSwap = ref(false)
 const swapActions = [
-  { name: 'TRX转USDT', val: 'trx2usdt' },
-  { name: 'USDT转TRX', val: 'usdt2trx' }
+  { name: t('wallet.trxToUsdt'), val: 'trx2usdt' },
+  { name: t('wallet.usdtToTrx'), val: 'usdt2trx' }
 ]
 const onSwapAction = (action) => {
   if (action.val == 'usdt2trx') {

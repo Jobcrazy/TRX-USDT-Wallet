@@ -1,18 +1,23 @@
 const express = require("express");
 const router = express.Router();
 const { checkOtp } = require("../../../common/otp");
-const { minOut } = require("../../../common/quote");
+const { minOut, protectedMinOut } = require("../../../common/quote");
 const utils = require("../../../common/utils");
 const auth = require("../../../common/auth");
 const errorCode = require("../../../common/errorCode");
 const { checkPwd } = require("../../../common/payPwd");
-const { positiveSun } = require("../../../common/amount");
+const { positiveSun, positiveUnits, formatUnits } = require("../../../common/amount");
+const { getTokenDecimals } = require("../../../blockchains/tron/tokenDecimals");
+const config = require("config");
+const { estimateFee } = require("../../../blockchains/tron/estimateFee");
 const tronWeb = require("../../../blockchains/tron");
 const Wallet = require("../../../model/wallet");
 const swapRouter = require("../../../blockchains/tron/sunswap/router");
 const usdt = require("../../../blockchains/tron/tokens/usdt");
 
-const MAX_RESULT_SIZE_IN_TX = 75;
+const usdtDecimals = (inst) => getTokenDecimals(inst, tronWeb.getConfig().tokens.usdt, tronWeb.getConfig().rpc_url);
+const positiveUsdt = async (value, inst) => positiveUnits(value, await usdtDecimals(inst));
+const swapDeadline = () => Math.floor(Date.now() / 1000) + config.get("wallet.swap_deadline_seconds");
 
 router.post("/trx2usdt", auth, async (req, res, next) => {
     try {
@@ -20,7 +25,7 @@ router.post("/trx2usdt", auth, async (req, res, next) => {
         const amount = req.body.amount;
         if (!address || !amount)
             return utils.SendError(res, errorCode.error_lack_param);
-        // 检查密码和secret
+        // Verify the payment password and 2FA secret
         const user = await utils.GetCurUser(req);
         if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
@@ -32,19 +37,18 @@ router.post("/trx2usdt", auth, async (req, res, next) => {
         ) {
             return utils.SendError(res, errorCode.error_credential);
         }
-        // 兑换
+        // Swap
         const wallet = await Wallet.findOne({
             where: { address: address, userId: user.id },
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        // 工厂合同(用于取得Pool合同)
-        // 路由合同
+        // Router contract
         const routerContract = tronWebInst.contract(
             swapRouter,
             tronWeb.getConfig().sunswap.router
         );
-        // 计算能兑换的个数
+        // Calculate the expected output amount
         const amountIn = positiveSun(amount);
         const amountsOut = await routerContract.methods
             .getAmountsOut(amountIn, [
@@ -54,13 +58,11 @@ router.post("/trx2usdt", auth, async (req, res, next) => {
             .call();
         if (!req.body.minAmountOut)
             return utils.SendError(res, errorCode.error_lack_param);
-        const amountOutMin = positiveSun(req.body.minAmountOut);
-        if (
-            amountOutMin < minOut(amountsOut.amounts[1]) ||
-            amountOutMin > BigInt(amountsOut.amounts[1])
-        )
+        const userMin = await positiveUsdt(req.body.minAmountOut, tronWebInst);
+        const amountOutMin = protectedMinOut(amountsOut.amounts[1], userMin);
+        if (amountOutMin === null)
             return utils.SendError(res, errorCode.error_transaction);
-        // 发起兑换
+        // Build the swap transaction
         const functionSelector =
             "swapExactETHForTokens(uint256,address[],address,uint256)";
         const parameter = [
@@ -81,7 +83,7 @@ router.post("/trx2usdt", auth, async (req, res, next) => {
             }, // recipient
             {
                 type: "uint256",
-                value: Math.floor(Date.now() / 1000) + 3600,
+                value: swapDeadline(),
             }, // deadline
         ];
         const tx = await tronWebInst.transactionBuilder.triggerSmartContract(
@@ -93,7 +95,7 @@ router.post("/trx2usdt", auth, async (req, res, next) => {
             parameter
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
-        // 广播交易到区块链上
+        // Broadcast the transaction
         const broadcast = await tronWebInst.trx.sendRawTransaction(signedTx);
         if (broadcast.result)
             return utils.SendResult(res, {
@@ -117,13 +119,12 @@ router.post("/trx2usdt/estimate", auth, async (req, res, next) => {
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
-        // 工厂合同(用于取得Pool合同)
-        // 路由合同
+        // Router contract
         const routerContract = tronWebInst.contract(
             swapRouter,
             tronWeb.getConfig().sunswap.router
         );
-        // 计算能兑换的个数
+        // Calculate the expected output amount
         const amountIn = positiveSun(amount);
         const amountsOut = await routerContract.methods
             .getAmountsOut(amountIn, [
@@ -132,7 +133,7 @@ router.post("/trx2usdt/estimate", auth, async (req, res, next) => {
             ])
             .call();
         const amountOutMin = minOut(amountsOut.amounts[1]);
-        // 发起兑换
+        // Build the swap transaction
         const functionSelector =
             "swapExactETHForTokens(uint256,address[],address,uint256)";
         const parameter = [
@@ -153,7 +154,7 @@ router.post("/trx2usdt/estimate", auth, async (req, res, next) => {
             }, // recipient
             {
                 type: "uint256",
-                value: Math.floor(Date.now() / 1000) + 3600,
+                value: swapDeadline(),
             }, // deadline
         ];
         const tx = await tronWebInst.transactionBuilder.triggerConstantContract(
@@ -166,43 +167,13 @@ router.post("/trx2usdt/estimate", auth, async (req, res, next) => {
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
 
-        // 获取目前链上的参数
-        let cost = BigInt(0);
-        const resources = await tronWebInst.trx.getAccountResources(address);
-        const bwLeft =
-            (resources.freeNetLimit ? resources.freeNetLimit : 0) -
-            (resources.freeNetUsed ? resources.freeNetUsed : 0);
-        const enLeft =
-            (resources.EnergyLimit ? resources.EnergyLimit : 0) -
-            (resources.EnergyUsed ? resources.EnergyUsed : 0);
-        const chainParams = await tronWebInst.trx.getChainParameters();
-        const bwPrice = chainParams.find(
-            (param) => param.key === "getTransactionFee"
-        ).value;
-        const energyFee = chainParams.find(
-            (param) => param.key === "getEnergyFee"
-        ).value;
-
-        // 计算交易的长度
-        let sigLen = 0;
-        for (let i = 0; i < signedTx.signature.length; i++) {
-            sigLen += signedTx.signature[i].length / 2;
-        }
-        const tsLen =
-            signedTx.raw_data_hex.length / 2 + sigLen + MAX_RESULT_SIZE_IN_TX;
-
-        // 计算带宽消耗，如果发送方的可用带宽不够，则烧掉TRX作为交易费
-        if (bwLeft < tsLen) {
-            cost += BigInt(tsLen * bwPrice);
-        }
-
-        // 计算所需的能量价格，如果有能量，则优先从能量扣减
-        if (enLeft < tx.energy_used) {
-            cost += BigInt((tx.energy_used - enLeft) * energyFee);
-        }
+        // Estimate fees using current chain parameters and account resources.
+        const cost = await estimateFee(tronWebInst, address, signedTx, {
+            energyUsed: tx.energy_used,
+        });
 
         return utils.SendResult(res, {
-            amount: tronWebInst.fromSun(amountOutMin),
+            amount: formatUnits(amountOutMin, await usdtDecimals(tronWebInst)),
             cost: tronWebInst.fromSun(cost),
         });
     } catch (error) {
@@ -216,7 +187,7 @@ router.post("/usdt2trx", auth, async (req, res, next) => {
         const amount = req.body.amount;
         if (!address || !amount)
             return utils.SendError(res, errorCode.error_lack_param);
-        // 检查密码和secret
+        // Verify the payment password and 2FA secret
         const user = await utils.GetCurUser(req);
         if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
@@ -229,19 +200,19 @@ router.post("/usdt2trx", auth, async (req, res, next) => {
             return utils.SendError(res, errorCode.error_credential);
         }
 
-        // 兑换
+        // Swap
         const wallet = await Wallet.findOne({
             where: { address: address, userId: user.id },
         });
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
 
-        // 看看授权额度是否足够
+        // Check whether the allowance is sufficient
         const usdtContract = tronWebInst.contract(
             usdt,
             tronWeb.getConfig().tokens.usdt
         );
-        const amountIn = positiveSun(amount);
+        const amountIn = await positiveUsdt(amount, tronWebInst);
         const balance = await usdtContract.methods.balanceOf(address).call();
         if (balance < amountIn)
             return utils.SendError(res, errorCode.error_balance);
@@ -252,7 +223,7 @@ router.post("/usdt2trx", auth, async (req, res, next) => {
             return utils.SendError(res, errorCode.error_approve);
         }
 
-        // 计算能兑换的个数
+        // Calculate the expected output amount
         const routerContract = tronWebInst.contract(
             swapRouter,
             tronWeb.getConfig().sunswap.router
@@ -265,14 +236,12 @@ router.post("/usdt2trx", auth, async (req, res, next) => {
             .call();
         if (!req.body.minAmountOut)
             return utils.SendError(res, errorCode.error_lack_param);
-        const amountOutMin = positiveSun(req.body.minAmountOut);
-        if (
-            amountOutMin < minOut(amountsOut.amounts[1]) ||
-            amountOutMin > BigInt(amountsOut.amounts[1])
-        )
+        const userMin = positiveSun(req.body.minAmountOut);
+        const amountOutMin = protectedMinOut(amountsOut.amounts[1], userMin);
+        if (amountOutMin === null)
             return utils.SendError(res, errorCode.error_transaction);
 
-        // 进行兑换
+        // Execute the swap
         const functionSelector =
             "swapExactTokensForETH(uint256,uint256,address[],address,uint256)";
         const parameter = [
@@ -297,7 +266,7 @@ router.post("/usdt2trx", auth, async (req, res, next) => {
             }, // recipient
             {
                 type: "uint256",
-                value: Math.floor(Date.now() / 1000) + 3600,
+                value: swapDeadline(),
             }, // deadline
         ];
         const tx = await tronWebInst.transactionBuilder.triggerSmartContract(
@@ -308,7 +277,7 @@ router.post("/usdt2trx", auth, async (req, res, next) => {
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
 
-        // 广播交易到区块链上
+        // Broadcast the transaction
         const broadcast = await tronWebInst.trx.sendRawTransaction(signedTx);
         if (broadcast.result)
             return utils.SendResult(res, {
@@ -333,12 +302,12 @@ router.post("/usdt2trx/estimate", auth, async (req, res, next) => {
         if (!wallet) return utils.SendError(res, errorCode.error_address);
         const tronWebInst = tronWeb.getTronWeb(wallet.privateKey);
 
-        // 看看授权额度是否足够
+        // Check whether the allowance is sufficient
         const usdtContract = tronWebInst.contract(
             usdt,
             tronWeb.getConfig().tokens.usdt
         );
-        const amountIn = positiveSun(amount);
+        const amountIn = await positiveUsdt(amount, tronWebInst);
         const balance = await usdtContract.methods.balanceOf(address).call();
         if (balance < amountIn)
             return utils.SendError(res, errorCode.error_balance);
@@ -349,7 +318,7 @@ router.post("/usdt2trx/estimate", auth, async (req, res, next) => {
             return utils.SendError(res, errorCode.error_approve);
         }
 
-        // 计算能兑换的个数
+        // Calculate the expected output amount
         const routerContract = tronWebInst.contract(
             swapRouter,
             tronWeb.getConfig().sunswap.router
@@ -362,7 +331,7 @@ router.post("/usdt2trx/estimate", auth, async (req, res, next) => {
             .call();
         const amountOutMin = minOut(amountsOut.amounts[1]);
 
-        // 进行兑换
+        // Execute the swap
         const functionSelector =
             "swapExactTokensForETH(uint256,uint256,address[],address,uint256)";
         const parameter = [
@@ -387,7 +356,7 @@ router.post("/usdt2trx/estimate", auth, async (req, res, next) => {
             }, // recipient
             {
                 type: "uint256",
-                value: Math.floor(Date.now() / 1000) + 3600,
+                value: swapDeadline(),
             }, // deadline
         ];
         const tx = await tronWebInst.transactionBuilder.triggerConstantContract(
@@ -398,40 +367,10 @@ router.post("/usdt2trx/estimate", auth, async (req, res, next) => {
         );
         const signedTx = await tronWebInst.trx.sign(tx.transaction);
 
-        // 获取目前链上的参数
-        let cost = BigInt(0);
-        const resources = await tronWebInst.trx.getAccountResources(address);
-        const bwLeft =
-            (resources.freeNetLimit ? resources.freeNetLimit : 0) -
-            (resources.freeNetUsed ? resources.freeNetUsed : 0);
-        const enLeft =
-            (resources.EnergyLimit ? resources.EnergyLimit : 0) -
-            (resources.EnergyUsed ? resources.EnergyUsed : 0);
-        const chainParams = await tronWebInst.trx.getChainParameters();
-        const bwPrice = chainParams.find(
-            (param) => param.key === "getTransactionFee"
-        ).value;
-        const energyFee = chainParams.find(
-            (param) => param.key === "getEnergyFee"
-        ).value;
-
-        // 计算交易的长度
-        let sigLen = 0;
-        for (let i = 0; i < signedTx.signature.length; i++) {
-            sigLen += signedTx.signature[i].length / 2;
-        }
-        const tsLen =
-            signedTx.raw_data_hex.length / 2 + sigLen + MAX_RESULT_SIZE_IN_TX;
-
-        // 计算带宽消耗，如果发送方的可用带宽不够，则烧掉TRX作为交易费
-        if (bwLeft < tsLen) {
-            cost += BigInt(tsLen * bwPrice);
-        }
-
-        // 计算所需的能量价格，如果有能量，则优先从能量扣减
-        if (enLeft < tx.energy_used) {
-            cost += BigInt((tx.energy_used - enLeft) * energyFee);
-        }
+        // Estimate fees using current chain parameters and account resources.
+        const cost = await estimateFee(tronWebInst, address, signedTx, {
+            energyUsed: tx.energy_used,
+        });
 
         return utils.SendResult(res, {
             amount: tronWebInst.fromSun(amountOutMin),

@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const { promisify } = require("util");
 const scrypt = promisify(crypto.scrypt);
+const config = require("config");
 
 const COST = 1 << 15;
 const SALT_BYTES = 16;
@@ -49,8 +50,8 @@ async function checkPwd(user, password, required = false) {
     const redis = require("./redis");
     const attemptsKey = `user:${user.id}:payment_password_attempts`;
     const attempts = await redis.incr(attemptsKey);
-    if (attempts === 1) await redis.expire(attemptsKey, 5 * 60);
-    if (attempts > 5) return false;
+    if (attempts === 1) await redis.expire(attemptsKey, config.get("security.attempt_window_seconds"));
+    if (attempts > config.get("security.max_attempts")) return false;
     const valid = await matchPwd(password, user.password);
     if (!valid) return false;
     await redis.del(attemptsKey);

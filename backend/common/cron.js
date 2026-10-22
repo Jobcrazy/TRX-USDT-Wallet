@@ -3,6 +3,7 @@ const User = require("../model/user");
 const { Op } = require("sequelize");
 const axios = require("axios");
 const utils = require("./utils");
+const config = require("config");
 
 /*
 
@@ -18,7 +19,7 @@ const utils = require("./utils");
 
 */
 
-axios.defaults.timeout = 5000;
+axios.defaults.timeout = config.get("http.cron_timeout_ms");
 const second = 1;
 const minute = second * 60;
 const hour = second * 60;

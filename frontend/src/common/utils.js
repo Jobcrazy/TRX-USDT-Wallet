@@ -29,18 +29,18 @@ let utils = {
     return fmt
   },
   numFormat: (number, digits = 2) => {
-    // 将数字转换为字符串，使用固定的小数位数
+    // Convert the number to a string with fixed decimal places
     const parts = number.toString().split('.')
     const integerPart = parts[0]
     let decimalPart = parts[1] || ''
 
-    // 截取小数部分到指定位数，不四舍五入
+    // Truncate the fractional part without rounding
     decimalPart = decimalPart.slice(0, digits)
 
-    // 添加千位分隔符
+    // Add thousands separators
     const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
-    // 拼接整数部分和小数部分
+    // Join the integer and fractional parts
     return decimalPart ? `${formattedInteger}.${decimalPart}` : formattedInteger
   }
 }

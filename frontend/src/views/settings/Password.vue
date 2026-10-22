@@ -1,6 +1,6 @@
 <template>
   <div class="wrapper" v-if="!loading">
-    <!-- 密码输入框 -->
+    <!-- Password input -->
     <van-password-input
       :value="password"
       :focused="showKeyboard"
@@ -8,15 +8,17 @@
       :error-info="errorInfo"
       :info="info"
     />
-    <!-- 数字键盘 -->
+    <!-- Numeric keyboard -->
     <van-number-keyboard v-model="password" :show="showKeyboard" @blur="showKeyboard = false" />
   </div>
   <div class="loading" v-if="loading">
-    <van-loading size="24px" vertical>加载中...</van-loading>
+    <van-loading size="24px" vertical>{{ $t('security.loading') }}</van-loading>
   </div>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
@@ -24,14 +26,16 @@ import { backButton } from '@telegram-apps/sdk'
 import request from '@/common/request'
 import { setToken } from '@/common/session'
 
+const { t } = useI18n({ useScope: 'global' })
+
 const router = useRouter()
 const user = ref(null)
 const password = ref('')
 const showKeyboard = ref(true)
 const errorInfo = ref('')
 const loading = ref(false)
-const info = ref('请输入支付密码')
-const type = ref(null) // new.新设密码 modify.修改密码 remove.关闭密码
+const info = ref(t('common.enterPayPwd'))
+const type = ref(null) // new: set a password; modify: change it; remove: disable it
 
 let oldPassword = null
 let firstPassword = null
@@ -46,7 +50,7 @@ onMounted(() => {
     user.value = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null
     type.value = localStorage.getItem('passwordType') ? localStorage.getItem('passwordType') : 'new'
     if (type.value == 'modify') {
-      info.value = '请输入原支付密码'
+      info.value = t('security.oldPayPwd')
     }
     if (backButton.isMounted()) {
       backButton.onClick(backListener)
@@ -87,18 +91,18 @@ watch(password, (newVal) => {
 const onNewPassword = async (newVal) => {
   if (!firstPassword) {
     firstPassword = newVal
-    info.value = '请再次输入密码'
+    info.value = t('security.confirmPwd')
     return
   }
   secondPassword = newVal
   info.value = ''
   if (firstPassword != secondPassword) {
     firstPassword = null
-    errorInfo.value = '两次输入的密码不一致'
-    info.value = '请输入支付密码'
+    errorInfo.value = t('security.pwdMismatch')
+    info.value = t('common.enterPayPwd')
     return
   }
-  // 两次密码匹配，提交服务器请求
+  // Submit matching passwords to the server
   try {
     loading.value = true
     let res = await request('/api/user/password', 'POST', {
@@ -110,7 +114,7 @@ const onNewPassword = async (newVal) => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       showToast({
-        message: '成功设置密码',
+        message: t('security.passwordSet'),
         position: 'bottom'
       })
       localStorage.setItem('hasPassword', 'true')
@@ -121,7 +125,7 @@ const onNewPassword = async (newVal) => {
       oldPassword = null
       firstPassword = null
       secondPassword = null
-      info.value = '请输入新密码'
+      info.value = t('security.newPayPwd')
       showToast({
         message: res.message,
         position: 'bottom'
@@ -151,7 +155,7 @@ const onRemovePassword = async (newVal) => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       showToast({
-        message: '成功禁用密码',
+        message: t('security.passwordDisabled'),
         position: 'bottom'
       })
       localStorage.setItem('hasPassword', 'false')
@@ -172,7 +176,7 @@ const onRemovePassword = async (newVal) => {
     oldPassword = null
     firstPassword = null
     secondPassword = null
-    info.value = '请输入新密码'
+    info.value = t('security.newPayPwd')
     showToast({
       message: error.message,
       position: 'bottom'
@@ -183,23 +187,23 @@ const onRemovePassword = async (newVal) => {
 const onModifyPassword = async (newVal) => {
   if (!oldPassword) {
     oldPassword = newVal
-    info.value = '请输入新密码'
+    info.value = t('security.newPayPwd')
     return
   }
   if (!firstPassword) {
     firstPassword = newVal
-    info.value = '请再次输入新密码'
+    info.value = t('security.confirmNewPwd')
     return
   }
   secondPassword = newVal
   info.value = ''
   if (firstPassword != secondPassword) {
     firstPassword = null
-    errorInfo.value = '两次输入的密码不一致'
-    info.value = '请输入新密码'
+    errorInfo.value = t('security.pwdMismatch')
+    info.value = t('security.newPayPwd')
     return
   }
-  // 两次密码匹配，提交服务器请求
+  // Submit matching passwords to the server
   try {
     loading.value = true
     let res = await request('/api/user/password', 'POST', {
@@ -212,7 +216,7 @@ const onModifyPassword = async (newVal) => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       showToast({
-        message: '成功修改密码',
+        message: t('security.passwordChanged'),
         position: 'bottom'
       })
       localStorage.setItem('hasPassword', 'true')
@@ -223,7 +227,7 @@ const onModifyPassword = async (newVal) => {
       oldPassword = null
       firstPassword = null
       secondPassword = null
-      info.value = '请输入新密码'
+      info.value = t('security.newPayPwd')
       showToast({
         message: res.message,
         position: 'bottom'

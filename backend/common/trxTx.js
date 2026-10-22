@@ -1,4 +1,5 @@
-const MIN_TRANSFER_SUN = 1000000;
+const config = require("config");
+const { positiveSun } = require("./amount");
 
 function showTrx(transaction, addressHex) {
     const contract = transaction?.raw_data?.contract?.[0];
@@ -14,7 +15,7 @@ function showTrx(transaction, addressHex) {
         (typeof amount !== "string" || !/^\d+$/.test(amount))
     )
         return false;
-    if (BigInt(amount) < BigInt(MIN_TRANSFER_SUN)) return false;
+    if (BigInt(amount) < positiveSun(config.get("wallet.trx_history_minimum"))) return false;
 
     const walletAddress = addressHex.toLowerCase();
     return (

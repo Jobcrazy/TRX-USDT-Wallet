@@ -1,6 +1,6 @@
 <template>
   <van-notice-bar left-icon="info-o" color="#1989fa" background="#ecf9ff">
-    质押可赚带宽/能量抵交易费, 解押需3天到账
+    {{ $t('staking.hint') }}
   </van-notice-bar>
 
   <div class="wrapper">
@@ -11,15 +11,15 @@
           is-link
           readonly
           name="picker"
-          label="操作"
-          placeholder="请选择操作"
+          :label="$t('staking.action')"
+          :placeholder="$t('staking.selectAction')"
           @click="showStakePicker = true"
-          :rules="[{ required: true, message: '请选择操作' }]"
+          :rules="[{ required: true, message: $t('staking.selectAction') }]"
           :disabled="loading"
         >
           <template #button>
             <span v-if="stakeType.length && purposeType.length && !loading">
-              余额: {{ balance }}
+              {{ $t('common.balance') }} {{ balance }}
             </span>
           </template>
         </van-field>
@@ -28,33 +28,44 @@
           is-link
           readonly
           name="picker"
-          label="类型"
-          placeholder="请选择类型"
+          :label="$t('staking.type')"
+          :placeholder="$t('staking.selectType')"
           @click="showPurposePicker = true"
-          :rules="[{ required: true, message: '请选择操作' }]"
+          :rules="[{ required: true, message: $t('staking.selectAction') }]"
           :disabled="loading"
         />
         <van-field
           v-model="amount"
           type="number"
-          label="数量"
-          placeholder="请输入代币数量"
-          :rules="[{ required: true, message: '请输入代币数量' }]"
+          :label="$t('common.amount')"
+          :placeholder="$t('common.enterAmount')"
+          :rules="[{ required: true, message: $t('common.enterAmount') }]"
           :disabled="loading"
         >
           <template #button>
-            <span @click="amount = balanceAmount / 10 ** 6" v-if="balance">全部</span>
+            <span @click="amount = balanceAmount / 10 ** 6" v-if="balance">{{
+              $t('common.all')
+            }}</span>
           </template>
         </van-field>
       </van-cell-group>
 
       <div style="margin: 16px" v-if="estimated">
         <van-notice-bar color="#1989fa" background="#ecf9ff">
-          预计消耗 {{ fee }} 个TRX,
-          {{ stakeType[0].value == 'freeze' ? '获得' : '失去' }}
-          {{ benifit }} 个 {{ purposeType[0].value == 'ENERGY' ? '能量' : '带宽' }}
-          (可抵扣
-          {{ deduct }} 个TRX的{{ purposeType[0].value == 'ENERGY' ? '智能合约' : '普通' }}交易费用)
+          {{
+            $t('staking.resourceEstimate', {
+              fee,
+              change: stakeType[0].value == 'freeze' ? $t('staking.gain') : $t('staking.lose'),
+              amount: benifit,
+              resource:
+                purposeType[0].value == 'ENERGY' ? $t('common.energy') : $t('common.bandwidth'),
+              deduct,
+              kind:
+                purposeType[0].value == 'ENERGY'
+                  ? $t('staking.smartContract')
+                  : $t('staking.standard')
+            })
+          }}
         </van-notice-bar>
       </div>
 
@@ -68,7 +79,7 @@
             loading || balance == 0 || amount == 0 || parseFloat(amount) > balanceAmount / 10 ** 6
           "
         >
-          {{ estimated ? '提交请求' : '估算费用' }}
+          {{ estimated ? $t('staking.submitRequest') : $t('staking.estimateFee') }}
         </van-button>
       </div>
     </van-form>
@@ -108,11 +119,13 @@
     position="bottom"
     :style="{ height: '80%' }"
   >
-    <Password @password="on2FACode" info="请输入验证器上的数字" @cancel="cancel2FACode" />
+    <Password @password="on2FACode" :info="$t('common.enterOtp')" @cancel="cancel2FACode" />
   </van-popup>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { backButton } from '@telegram-apps/sdk'
@@ -121,6 +134,8 @@ import request from '@/common/request'
 import utils from '@/common/utils'
 import Password from '@/components/wallet/Password.vue'
 import { toSun } from '@/common/amount'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
 const wallet = ref(null)
@@ -145,12 +160,12 @@ const benifit = ref(0)
 const deduct = ref(0)
 
 const stakeColumns = ref([
-  { text: '质押', value: 'freeze' },
-  { text: '解押', value: 'unfreeze' }
+  { text: t('staking.stake'), value: 'freeze' },
+  { text: t('staking.unstake'), value: 'unfreeze' }
 ])
 const purposeColumns = ref([
-  { text: '带宽', value: 'BANDWIDTH' },
-  { text: '能量', value: 'ENERGY' }
+  { text: t('common.bandwidth'), value: 'BANDWIDTH' },
+  { text: t('common.energy'), value: 'ENERGY' }
 ])
 
 const backListener = () => {
@@ -171,7 +186,7 @@ const onPurposeConfirm = ({ selectedOptions }) => {
 
 onMounted(async () => {
   try {
-    // 读取钱包信息
+    // Load wallet information
     wallet.value = localStorage.getItem('wallet')
       ? JSON.parse(localStorage.getItem('wallet'))
       : null
@@ -236,7 +251,7 @@ const getSecurity = async () => {
   }
 }
 
-// 返回false则停止支付
+// Return false to stop the payment
 const checkSecurity = async () => {
   try {
     const security = await getSecurity()
@@ -244,7 +259,7 @@ const checkSecurity = async () => {
     const enable2fa = security.secret
 
     if (!hasPassword && !enable2fa) {
-      // 没有开启任何安全措施则直接转账
+      // Proceed when no payment protection is enabled
       return true
     }
     if (hasPassword && !password.value) {
@@ -309,7 +324,7 @@ const stake = async () => {
 const onSubmit = async () => {
   try {
     const amountSun = toSun(amount.value)
-    if (amountSun.gt(balanceAmount)) return showToast('余额不足')
+    if (amountSun.gt(balanceAmount)) return showToast(t('common.insufficientBalance'))
     if (!estimated.value) {
       return estimate()
     }
@@ -328,7 +343,7 @@ const onSubmit = async () => {
       const requiredSun = stakeType.value[0].value === 'freeze' ? amountSun.plus(feeSun) : feeSun
       if (requiredSun.gt(liquidSun)) {
         return showToast({
-          message: 'Gas不足, 请先充入更多TRX',
+          message: t('common.trxFeeShortage'),
           position: 'bottom'
         })
       }

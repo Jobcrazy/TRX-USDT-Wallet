@@ -2,10 +2,12 @@
   <van-notice-bar left-icon="info-o" color="#1989fa" background="#ecf9ff">
     <template #default>
       <div class="notify">
-        <span class="notify_left" @click="showApprove = true"
-          >您已授权兑换 {{ approved }} 个USDT, 点这里提升</span
-        >
-        <span class="notify_right" @click="refreshApprove" v-if="!loading">刷新</span>
+        <span class="notify_left" @click="showApprove = true">{{
+          $t('swap.swapAllowance', { amount: approved })
+        }}</span>
+        <span class="notify_right" @click="refreshApprove" v-if="!loading">{{
+          $t('common.refresh')
+        }}</span>
         <span class="notify_right" v-if="loading">
           <van-loading size="24" color="#1989fa" />
         </span>
@@ -18,7 +20,7 @@
       <div class="item">
         <div class="left">
           <van-image :src="tether" class="logo">
-            <template #error>加载失败</template>
+            <template #error>{{ $t('common.failedToLoad') }}</template>
           </van-image>
           <div class="name">{{ 'Tether' }}</div>
         </div>
@@ -33,17 +35,23 @@
         v-model="swapAmount"
         type="number"
         :disabled="loading"
-        name="数量"
-        label="数量"
-        placeholder="请输入要兑换的USDT数量"
-        :rules="[{ required: true, message: '请输入要兑换的USDT数量' }]"
+        name="amount"
+        :label="$t('common.amount')"
+        :placeholder="$t('swap.enterUsdt')"
+        :rules="[{ required: true, message: $t('swap.enterUsdt') }]"
       >
         <template #button>
-          <span @click="swapAmount = approved">全部</span>
+          <span @click="swapAmount = approved">{{ $t('common.all') }}</span>
         </template>
       </van-field>
       <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="swap_etimated">
-        预计消耗 {{ swap_fee }} 个TRX，最低获得 {{ tokenGot }} 个TRX
+        {{
+          $t('swap.swapEstimate', {
+            fee: swap_fee,
+            amount: tokenGot,
+            token: 'TRX'
+          })
+        }}
       </van-notice-bar>
 
       <div style="margin: 16px 0">
@@ -54,7 +62,7 @@
           :loading="loading"
           :disabled="swapAmount == 0 || swapAmount > realUsdtBalance || swapAmount > approved"
         >
-          {{ swap_etimated ? '兑换成TRX' : '估算兑换费用' }}
+          {{ swap_etimated ? $t('swap.swapToTrx') : $t('swap.estimateSwapFee') }}
         </van-button>
       </div>
     </van-form>
@@ -64,7 +72,7 @@
     <div class="approve" @click.stop>
       <div class="block">
         <div class="dlg_title">
-          <div class="title">更新授权额度</div>
+          <div class="title">{{ $t('swap.updateAllowance') }}</div>
           <div @click="closeAppove"><van-icon name="cross" /></div>
         </div>
         <van-form @submit="onUpdateApprove">
@@ -72,16 +80,16 @@
             <van-field
               v-model="newApproved"
               type="number"
-              placeholder="请填写新的授权额度"
-              :rules="[{ required: true, message: '请填写新的授权额度' }]"
+              :placeholder="$t('swap.enterAllowance')"
+              :rules="[{ required: true, message: $t('swap.enterAllowance') }]"
             />
             <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="approve_etimated">
-              大概需要消耗 {{ approve_fee }} 个TRX
+              {{ $t('swap.approvalFeeEstimate', { fee: approve_fee }) }}
             </van-notice-bar>
           </van-cell-group>
           <div style="margin: 16px">
             <van-button block type="primary" native-type="submit" :loading="loading">
-              {{ approve_etimated ? '授权' : '估算授权费用' }}
+              {{ approve_etimated ? $t('swap.approve') : $t('swap.estimateApprovalFee') }}
             </van-button>
           </div>
         </van-form>
@@ -104,11 +112,13 @@
     position="bottom"
     :style="{ height: '80%' }"
   >
-    <Password @password="on2FACode" info="请输入验证器上的数字" @cancel="cancel2FACode" />
+    <Password @password="on2FACode" :info="$t('common.enterOtp')" @cancel="cancel2FACode" />
   </van-popup>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import request from '@/common/request'
 import utils from '@/common/utils'
@@ -118,6 +128,8 @@ import { backButton } from '@telegram-apps/sdk'
 import Password from '@/components/wallet/Password.vue'
 import tether from '@/assets/icons/tether.svg'
 import { toSun } from '@/common/amount'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const approved = ref(0)
 const wallet = ref(null)
@@ -146,13 +158,13 @@ const backListener = () => {
 }
 
 onMounted(() => {
-  // 显示后退按钮
+  // Show the back button
   if (backButton.isMounted()) {
     backButton.show()
     backButton.onClick(backListener)
   }
 
-  // 读取钱包信息
+  // Load wallet information
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
   refreshApprove()
   loadTron()
@@ -218,7 +230,7 @@ const getSecurity = async () => {
   }
 }
 
-// 返回false则停止操作
+// Return false to stop the operation
 const checkSecurity = async () => {
   try {
     const security = await getSecurity()
@@ -226,7 +238,7 @@ const checkSecurity = async () => {
     const enable2fa = security.secret
 
     if (!hasPassword && !enable2fa) {
-      // 没有开启任何安全措施则直接转账
+      // Proceed when no payment protection is enabled
       return true
     }
     if (hasPassword && !password.value) {
@@ -329,7 +341,7 @@ const approve = async () => {
       approve_etimated.value = false
       swap_etimated.value = false
       showToast({
-        message: '更新授权成功, 请稍后刷新',
+        message: t('swap.allowanceUpdated'),
         position: 'bottom'
       })
     } else {
@@ -369,13 +381,13 @@ const onUpdateApprove = async () => {
     if (!approve_etimated.value) return await estimateApprove()
     if (realTrxBalance.value < approve_fee.value) {
       return showToast({
-        message: 'Gas不足, 请先充一些TRX',
+        message: t('swap.trxFeeShortage'),
         position: 'bottom'
       })
     }
     if (realUsdtBalance.value < newApproved.value) {
       return showToast({
-        message: '授权金额超出了USDT余额',
+        message: t('swap.allowanceTooHigh'),
         position: 'bottom'
       })
     }
@@ -443,7 +455,7 @@ const swap = async () => {
       swap_etimated.value = false
       router.back()
       showToast({
-        message: '兑换成功, 请稍后刷新',
+        message: t('swap.submitted'),
         duration: 5 * 1000,
         position: 'bottom'
       })
@@ -476,12 +488,12 @@ const onSwap = async () => {
       amountSun.gt(toSun(realUsdtBalance.value, true)) ||
       amountSun.gt(toSun(approved.value, true))
     )
-      return showToast('余额或授权额度不足')
+      return showToast(t('swap.balanceOrAllowance'))
     verifyType = 'swap'
     if (!swap_etimated.value) return await estimateSwap()
     if (toSun(realTrxBalance.value, true).lt(toSun(swap_fee.value, true))) {
       return showToast({
-        message: 'Gas不足, 请先充一些TRX',
+        message: t('swap.trxFeeShortage'),
         position: 'bottom'
       })
     }

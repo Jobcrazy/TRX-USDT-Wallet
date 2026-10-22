@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { getToken } from './session'
+import { localizeApiResponse, t } from '@/i18n'
 
 export default (url, method, data) => {
   const token = getToken()
@@ -15,11 +16,15 @@ export default (url, method, data) => {
       params: method === 'GET' && data ? data : null
     })
       .then((result) => {
-        resolve(result.data)
+        resolve(localizeApiResponse(result.data))
       })
       .catch((error) => {
         console.log(error)
-        reject(error)
+        if (error.response?.data && typeof error.response.data.code === 'number') {
+          resolve(localizeApiResponse(error.response.data))
+          return
+        }
+        reject(new Error(t('api.network'), { cause: error }))
       })
   })
 }

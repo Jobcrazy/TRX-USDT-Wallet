@@ -38,7 +38,7 @@ router.post("/login", async function (req, res, next) {
             },
         });
         if (!user) {
-            // 注册新用户
+            // Register a new user
             user = await User.create({
                 username: initData.user.id,
                 token: newToken(),
@@ -199,7 +199,7 @@ router.post("/get_2fa", auth, async function (req, res, next) {
             appName,
             secret
         );
-        await redis.set(key, secret, "EX", 3 * 60);
+        await redis.set(key, secret, "EX", config.get("security.otp_setup_seconds"));
         utils.SendResult(res, {
             otpauthUrl,
         });
@@ -266,6 +266,7 @@ router.post("/get_security", auth, async function (req, res, next) {
         return utils.SendResult(res, {
             password,
             secret,
+            biometricEnabled: Boolean(user.biometricSecretHash),
         });
     } catch (error) {
         console.log(error);

@@ -17,7 +17,7 @@
     <div class="info" v-if="props.info" @click="router.push({ name: 'Freeze' })">
       <div class="item">
         <div class="name">
-          <div class="left">能量</div>
+          <div class="left">{{ $t('common.energy') }}</div>
           <div class="right">{{ enLeft }} / {{ energy }}</div>
         </div>
         <div>
@@ -28,12 +28,14 @@
             color="#f2826a"
           />
         </div>
-        <div class="staked-left" v-if="props.showStake">已质押 {{ stakedEnergy }} 个TRX</div>
+        <div class="staked-left" v-if="props.showStake">
+          {{ $t('wallet.stakedTrxAmount', { amount: stakedEnergy }) }}
+        </div>
       </div>
       <div class="divider"></div>
       <div class="item">
         <div class="name">
-          <div class="left">带宽</div>
+          <div class="left">{{ $t('common.bandwidth') }}</div>
           <div class="right">{{ bwLeft }} / {{ bandwidth }}</div>
         </div>
         <div>
@@ -44,7 +46,9 @@
             color="#52c41a"
           />
         </div>
-        <div class="staked-right" v-if="props.showStake">已质押 {{ stakedBandwidth }} 个TRX</div>
+        <div class="staked-right" v-if="props.showStake">
+          {{ $t('wallet.stakedTrxAmount', { amount: stakedBandwidth }) }}
+        </div>
       </div>
     </div>
   </div>
@@ -53,7 +57,7 @@
     <div class="wrapper" @click.stop>
       <div class="block">
         <div class="dlg_title">
-          <div class="title">重命名子账户</div>
+          <div class="title">{{ $t('wallet.renameSubaccount') }}</div>
           <div @click="showRename = false"><van-icon name="cross" /></div>
         </div>
         <van-form @submit="onSubmit">
@@ -61,14 +65,14 @@
             <van-field
               v-model="alias"
               maxlength="10"
-              placeholder="子账户别名不能重复"
-              :rules="[{ required: true, message: '请填写账户别名' }]"
+              :placeholder="$t('wallet.uniqueAlias')"
+              :rules="[{ required: true, message: $t('wallet.enterAlias') }]"
               :disabled="loading"
             />
           </van-cell-group>
           <div style="margin: 16px">
             <van-button block type="primary" native-type="submit" :loading="loading">
-              重命名
+              {{ $t('wallet.rename') }}
             </van-button>
           </div>
         </van-form>
@@ -78,12 +82,16 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { ref, onMounted, watch } from 'vue'
 import request from '@/common/request'
 import utils from '@/common/utils'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import copy from 'copy-to-clipboard'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps({
   wallet: {
@@ -176,13 +184,13 @@ const copyAddress = async () => {
   try {
     copy(props.wallet.address)
     showToast({
-      message: '地址已复制到剪贴板',
+      message: t('common.addressCopied'),
       position: 'bottom'
     })
   } catch (error) {
     console.log(error)
     showToast({
-      message: '地址复制失败',
+      message: t('common.copyAddressFailed'),
       position: 'bottom'
     })
   }

@@ -1,40 +1,43 @@
 <template>
   <div class="wrapper">
-    <van-cell-group title="安全设置">
-      <van-cell title="指纹/面容登录" label="登录时验证本机指纹或面容" v-if="showBiometric">
+    <van-cell-group :title="$t('security.securitySettings')">
+      <van-cell
+        :title="$t('security.bioLogin')"
+        :label="$t('security.bioHint')"
+        v-if="showBiometric"
+      >
         <template #right-icon>
           <van-switch v-model="enableBio" :loading="loading" @change="onBiometric" />
         </template>
       </van-cell>
-      <van-cell title="支付密码" label="付款时验证支付密码" is-link @click="onSetPassword" />
-      <van-cell title="双因素验证支付" label="付款时验证Google或微软验证器生成的动态密码">
+      <van-cell
+        :title="$t('security.payPwd')"
+        :label="$t('security.payPwdHint')"
+        is-link
+        @click="onSetPassword"
+      />
+      <van-cell :title="$t('security.otpPayment')" :label="$t('security.otpHint')">
         <template #right-icon>
           <van-switch v-model="enable2fa" :loading="loading2fa" @change="on2FA" />
         </template>
       </van-cell>
-      <!-- <van-cell
-        title="导出助记词"
-        label="用于恢复或迁移钱包, 丢失将导致资产损失"
-        is-link
-        @click="onMnemonic"
-      /> -->
     </van-cell-group>
 
-    <van-cell-group title="钱包">
+    <van-cell-group :title="$t('security.wallet')">
       <van-cell
-        title="重置钱包"
-        label="用新的助记词重置钱包, 重置前请备份老助记词"
+        :title="$t('security.resetWallet')"
+        :label="$t('security.resetHint')"
         is-link
         @click="showResetDlg"
       />
     </van-cell-group>
 
-    <van-cell-group title="关于妙蛙钱包">
+    <van-cell-group :title="$t('security.about')">
       <van-cell>
         <template #title>
           <span class="custom-title">
-            <span style="font-weight: bold">妙蛙钱包</span>
-            是一款Telegram小程序。它由知名Web3团队打造，帮助您更加安全、方便地管理加密资产。
+            <span style="font-weight: bold">{{ $t('common.miaowaWallet') }}</span>
+            {{ $t('security.aboutText') }}
           </span>
         </template>
       </van-cell>
@@ -44,7 +47,7 @@
   <van-action-sheet
     v-model:show="show"
     :actions="actions"
-    cancel-text="取消"
+    :cancel-text="$t('common.cancel')"
     close-on-click-action
     @select="onPwAction"
   />
@@ -52,7 +55,7 @@
   <van-action-sheet
     v-model:show="showReset"
     :actions="resetActions"
-    cancel-text="取消"
+    :cancel-text="$t('common.cancel')"
     close-on-click-action
     @select="onResetAction"
   />
@@ -74,7 +77,7 @@
   >
     <Password
       @password="onUnBind"
-      info="请输入验证器上的数字"
+      :info="$t('common.enterOtp')"
       @cancel="cancel2FACode"
       :loading="loading2fa"
     />
@@ -82,6 +85,8 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { showToast } from 'vant'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -90,6 +95,8 @@ import Password from '@/components/wallet/Password.vue'
 import request from '@/common/request'
 import { getToken, setToken } from '@/common/session'
 import { setPending2FA } from '@/common/pending-2fa'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
 const user = ref(null)
@@ -103,11 +110,11 @@ const enable2fa = ref(false)
 const loading2fa = ref(false)
 const show2FACode = ref(false)
 const actions = [
-  { name: '更改密码', val: 'modify' },
-  { name: '禁用密码', val: 'remove', color: '#ee0a24' }
+  { name: t('security.changePassword'), val: 'modify' },
+  { name: t('security.disablePassword'), val: 'remove', color: '#ee0a24' }
 ]
 const showReset = ref(false)
-const resetActions = [{ name: '用"新的助记词"重建钱包', val: 'reset', color: '#ee0a24' }]
+const resetActions = [{ name: t('security.newPhraseReset'), val: 'reset', color: '#ee0a24' }]
 let passwordAction = null
 
 const backListener = () => {
@@ -152,7 +159,23 @@ onMounted(async () => {
     if (backButton.isMounted()) {
       backButton.onClick(backListener)
       backButton.show()
-      await biometry.mount()
+    }
+    if (showBiometric.value && biometry.isSupported()) {
+      try {
+        await biometry.mount()
+      } catch (error) {
+        console.log(error)
+      }
+    }
+    try {
+      const security = await request('/api/user/get_security', 'POST')
+      if (!security.code) {
+        hasPassword.value = security.data.password
+        enable2fa.value = security.data.secret
+        enableBio.value = security.data.biometricEnabled
+      }
+    } catch (error) {
+      console.log(error)
     }
   } catch (error) {
     console.log(error)
@@ -188,7 +211,7 @@ const onPwAction = (action) => {
 const showResetDlg = () => {
   if (!hasPassword.value) {
     return showToast({
-      message: '请先设置支付密码',
+      message: t('security.setPayPwdFirst'),
       position: 'bottom'
     })
   }
@@ -202,35 +225,23 @@ const onResetAction = (action) => {
   }
 }
 
-/*
-const onMnemonic = () => {
-  if (!hasPassword.value) {
-    return showToast({
-      message: '请先设置支付密码',
-      position: 'bottom'
-    })
-  }
-  router.push({ name: 'Mnemonic' })
-}
-*/
-
 const on2FA = async () => {
   try {
     loading2fa.value = true
     if (enable2fa.value == true) {
-      // 开启2FA
+      // Enable 2FA
       let res = await request('/api/user/get_2fa', 'POST', {})
       loading2fa.value = false
       if (res.code && res.type == 'login') {
         return router.replace({ name: 'Login' })
       } else if (!res.code) {
-        // 跳转到绑定页面
+        // Open the setup page
         setPending2FA(res.data.otpauthUrl)
         router.push({ name: 'Enable2FA' })
         return
       } else {
         if (res.type == '2fa_bind') {
-          // 已经开启过了
+          // Already enabled
           return
         }
         showToast({
@@ -240,7 +251,7 @@ const on2FA = async () => {
         enable2fa.value = !enable2fa.value
       }
     } else {
-      // 关闭2FA
+      // Disable 2FA
       show2FACode.value = true
     }
   } catch (error) {
@@ -267,7 +278,7 @@ const onUnBind = async (code) => {
     } else if (!res.code) {
       loading.value = false
       showToast({
-        message: '成功关闭双因素验证',
+        message: t('security.otpDisabled'),
         position: 'bottom'
       })
       localStorage.setItem('enable2fa', false)
@@ -276,7 +287,7 @@ const onUnBind = async (code) => {
       enable2fa.value = !enable2fa.value
       if (res.type == '2fa_secret') {
         showToast({
-          message: '验证码错误输入错误',
+          message: t('security.badOtp'),
           position: 'bottom'
         })
         return
@@ -302,7 +313,7 @@ const onBiometric = async () => {
     if (!getToken() || !user.value) {
       loading.value = false
       return showToast({
-        message: '登录信息异常',
+        message: t('security.invalidSession'),
         position: 'bottom'
       })
     }
@@ -310,28 +321,28 @@ const onBiometric = async () => {
       loading.value = false
       enableBio.value = false
       return showToast({
-        message: '请先设置支付密码',
+        message: t('security.setPayPwdFirst'),
         position: 'bottom'
       })
     }
-    if (!biometry.isSupported()) {
+    if (enableBio.value && !biometry.isSupported()) {
       loading.value = false
       enableBio.value = false
-      showToast({ message: '当前 Telegram 版本不支持生物识别', position: 'bottom' })
+      showToast({ message: t('security.bioUnsupported'), position: 'bottom' })
       return
     }
     if (enableBio.value) {
       if (!(await biometry.requestAccess())) {
         loading.value = false
         enableBio.value = false
-        showToast({ message: '请在 Telegram 设置中允许生物识别', position: 'bottom' })
+        showToast({ message: t('security.allowBio'), position: 'bottom' })
         biometry.openSettings()
         return
       }
       passwordAction = 'bio'
       showPassword.value = true
     } else {
-      // 关闭生物识别
+      // Disable biometric login
       passwordAction = 'bio'
       showPassword.value = true
     }
@@ -340,7 +351,7 @@ const onBiometric = async () => {
     enableBio.value = false
     loading.value = false
     showToast({
-      message: '无法开启生物识别，请检查 Telegram 权限和系统设置',
+      message: t('security.bioEnableFailed'),
       position: 'bottom'
     })
   }
@@ -353,8 +364,9 @@ const onPassword = async (password) => {
       let saved = {}
       if (biometry.isSupported()) {
         try {
-          const { status, token } = await biometry.authenticate({ reason: '管理生物识别凭据' })
-          if (enableBio.value && status !== 'authorized') throw new Error('生物识别验证未完成')
+          const { status, token } = await biometry.authenticate({ reason: t('security.manageBio') })
+          if (enableBio.value && status !== 'authorized')
+            throw new Error(t('security.bioIncomplete'))
           if (status === 'authorized' && token) {
             try {
               const parsed = JSON.parse(token)
@@ -367,7 +379,7 @@ const onPassword = async (password) => {
           if (enableBio.value) throw error
         }
       }
-      // 旧版本保存过 API token，只保留新格式的设备凭据。
+      // Earlier versions stored API tokens; keep only device credentials in the new format.
       saved = Object.fromEntries(Object.entries(saved).filter(([, entry]) => entry?.secret))
       const action = enableBio.value ? 'enable' : 'disable'
       const res = await request(`/api/user/biometric/${action}`, 'POST', { password })
@@ -378,21 +390,21 @@ const onPassword = async (password) => {
       if (biometry.isSupported()) {
         try {
           const updateStatus = await biometry.updateToken({
-            reason: enableBio.value ? '开启指纹/面容登录' : '关闭指纹/面容登录',
+            reason: enableBio.value ? t('security.enableBiometricLogin') : t('security.disableBio'),
             token: Object.keys(saved).length ? JSON.stringify(saved) : ''
           })
           if (
             updateStatus !==
             (enableBio.value ? 'updated' : Object.keys(saved).length ? 'updated' : 'removed')
           )
-            throw new Error('生物识别凭据未保存')
+            throw new Error(t('security.bioSaveFailed'))
         } catch (error) {
           if (enableBio.value) {
             const rollback = await request('/api/user/biometric/disable', 'POST', { password })
             if (!rollback.code) setToken(rollback.data.token)
             throw error
           }
-          showToast('登录验证已关闭，但本机凭据清理失败')
+          showToast(t('security.bioCleanupFailed'))
         }
       }
       localStorage.setItem(`${user.value.id}:biometric`, enableBio.value)

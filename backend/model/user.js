@@ -6,9 +6,9 @@ const User = sequelize.define(
     {
         id: {
             type: DataTypes.UUID,
-            defaultValue: Sequelize.UUIDV4, // 使用 Sequelize.UUIDV4 来生成 UUID
-            primaryKey: true, // 设置为主键
-            allowNull: false, // 不允许为空
+            defaultValue: Sequelize.UUIDV4, // Generate a UUID with Sequelize.UUIDV4
+            primaryKey: true, // Primary key
+            allowNull: false, // Required
         },
         username: {
             type: DataTypes.STRING(40),

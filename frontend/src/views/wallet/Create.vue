@@ -1,7 +1,7 @@
 <template>
   <van-tabs>
-    <van-tab title="创建新钱包">
-      <van-cell-group title="请用纸笔记录下列提示词，并确保不会泄露或丢失">
+    <van-tab :title="$t('wallet.createWallet')">
+      <van-cell-group :title="$t('common.backupPhrase')">
         <van-grid direction="horizontal" :column-num="mnemonic.length == 12 ? 2 : 3">
           <van-grid-item v-for="(word, index) in mnemonic" :key="index" :text="word">
             <template #icon> {{ index + 1 }}.&nbsp; </template>
@@ -11,12 +11,12 @@
       </van-cell-group>
       <van-divider />
       <div class="wrapper">
-        <van-button type="primary" block :loading="loading" @click="onCreate(true)"
-          >立刻创建</van-button
-        >
+        <van-button type="primary" block :loading="loading" @click="onCreate(true)">{{
+          $t('wallet.createNow')
+        }}</van-button>
       </div>
     </van-tab>
-    <van-tab title="恢复老钱包">
+    <van-tab :title="$t('wallet.restoreWallet')">
       <van-divider />
       <van-cell-group inset>
         <van-field
@@ -24,14 +24,14 @@
           rows="10"
           autosize
           type="textarea"
-          placeholder="请输入老钱包的提示词，以空格区分"
+          :placeholder="$t('wallet.enterPhrase')"
         />
       </van-cell-group>
       <van-divider />
       <div class="wrapper">
-        <van-button type="primary" block :loading="loading" @click="onCreate(false)"
-          >立刻恢复</van-button
-        >
+        <van-button type="primary" block :loading="loading" @click="onCreate(false)">{{
+          $t('wallet.restoreNow')
+        }}</van-button>
       </div>
     </van-tab>
   </van-tabs>
@@ -65,8 +65,8 @@ const onCreate = async (bCreate) => {
       curMnemonic = mnemonic.value.join(' ')
     } else {
       curMnemonic = oldMnemonic.value
-        .replace(/[\r\n]+/g, ' ') // 将换行符替换为空格
-        .replace(/\s+/g, ' ') // 将多个空格替换为一个空格
+        .replace(/[\r\n]+/g, ' ') // Replace line breaks with spaces
+        .replace(/\s+/g, ' ') // Collapse repeated spaces
         .trim()
     }
     loading.value = true

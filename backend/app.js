@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan");
+const config = require("config");
 const cron = require("./common/cron");
 const indexRouter = require("./routes/index");
 const userRouter = require("./routes/user");
@@ -13,7 +14,7 @@ const trxRouter = require("./routes/wallet/tron/tokens/trx");
 const usdtRouter = require("./routes/wallet/tron/tokens/usdt");
 const app = express();
 
-app.set("trust proxy", 1);
+app.set("trust proxy", config.get("http.trusted_proxy_hops"));
 app.use(logger("dev"));
 app.use(cookieParser());
 app.use(express.json());

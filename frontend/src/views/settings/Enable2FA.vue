@@ -2,17 +2,17 @@
   <div class="wrapper">
     <div class="logos">
       <van-image :src="google" class="logo">
-        <template #error>加载失败</template>
+        <template #error>{{ $t('common.failedToLoad') }}</template>
       </van-image>
       <van-image :src="microsoft" class="logo">
-        <template #error>加载失败</template>
+        <template #error>{{ $t('common.failedToLoad') }}</template>
       </van-image>
     </div>
-    <div class="title">用Google或微软验证器扫描</div>
+    <div class="title">{{ $t('security.scanOtp') }}</div>
     <div class="qrcode-wrapper">
       <canvas class="qrcode" ref="canvas" />
     </div>
-    <div class="desc">您也可以复制下方地址并添加到验证器</div>
+    <div class="desc">{{ $t('security.copyOtpLink') }}</div>
     <div class="address_wrapper" v-if="otpauthUrl" @click="copyAddress">
       <div class="address">{{ otpauthUrl }}</div>
       <div class="copy">
@@ -21,7 +21,7 @@
     </div>
 
     <van-button class="send" block type="primary" @click="showPassword = true">
-      验证并开启
+      {{ $t('security.verifyAndEnable') }}
     </van-button>
   </div>
 
@@ -33,7 +33,7 @@
   >
     <Password
       @password="onBind"
-      info="请输入验证器上的数字"
+      :info="$t('common.enterOtp')"
       @cancel="showPassword = false"
       :loading="loading"
     />
@@ -41,6 +41,8 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { backButton } from '@telegram-apps/sdk'
@@ -52,6 +54,8 @@ import microsoft from '@/assets/icons/microsoft.svg'
 import Password from '@/components/wallet/Password.vue'
 import request from '@/common/request'
 import { getPending2FA, setPending2FA } from '@/common/pending-2fa'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
 const canvas = ref(null)
@@ -67,7 +71,7 @@ onMounted(() => {
   if (backButton.isMounted()) {
     backButton.onClick(backListener)
   }
-  // 读取钱包信息
+  // Load wallet information
   otpauthUrl.value = getPending2FA()
   if (!otpauthUrl.value) {
     router.replace({ name: 'Settings' })
@@ -100,15 +104,15 @@ onUnmounted(() => {
 
 const copyAddress = async () => {
   try {
-    if (!copy(otpauthUrl.value)) throw new Error('复制失败')
+    if (!copy(otpauthUrl.value)) throw new Error(t('security.copyFailed'))
     showToast({
-      message: '验证器地址已复制到剪贴板',
+      message: t('security.otpLinkCopied'),
       position: 'bottom'
     })
   } catch (error) {
     console.log(error)
     showToast({
-      message: '地址复制失败',
+      message: t('common.copyAddressFailed'),
       position: 'bottom'
     })
   }
@@ -126,7 +130,7 @@ const onBind = async (code) => {
     } else if (!res.code) {
       loading.value = false
       showToast({
-        message: '成功开启双因素验证',
+        message: t('security.otpEnabled'),
         position: 'bottom'
       })
       localStorage.setItem('enable2fa', true)
@@ -135,14 +139,14 @@ const onBind = async (code) => {
     } else {
       if (res.type == '2fa_secret') {
         showToast({
-          message: '验证码错误输入错误',
+          message: t('security.badOtp'),
           position: 'bottom'
         })
         return router.back()
       } else if (res.type == '2fa_bind') {
-        // 已经开启过了
+        // Already enabled
         showToast({
-          message: '成功开启双因素验证',
+          message: t('security.otpEnabled'),
           position: 'bottom'
         })
         return router.back()
@@ -198,7 +202,7 @@ const onBind = async (code) => {
     width: 80%;
     padding: 10px;
     border-radius: 5px;
-    border: 1px solid #c0c0c0; /* 外边框 */
+    border: 1px solid #c0c0c0; /* Outer border */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -207,8 +211,8 @@ const onBind = async (code) => {
       width: 80%;
       color: #bbbbbb;
       font-size: 14px;
-      word-wrap: break-word; /* 适用于旧浏览器 */
-      overflow-wrap: break-word; /* 现代浏览器推荐 */
+      word-wrap: break-word; /* Fallback for older browsers */
+      overflow-wrap: break-word; /* Preferred for modern browsers */
     }
     .copy {
       padding: 0 0 0 10px;

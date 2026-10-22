@@ -16,9 +16,9 @@ router.post("/create", auth, async (req, res, next) => {
         if (typeof req.body.mnemonic !== "string")
             return utils.SendError(res, errorCode.error_lack_param);
         const mnemonic = req.body.mnemonic
-            .replace(/[\r\n]+/g, " ") // 将换行符替换为空格
-            .replace(/\s+/g, " ") // 将多个空格替换为一个空格
-            .trim(); // 去除首尾多余的空格
+            .replace(/[\r\n]+/g, " ") // Replace line breaks with spaces
+            .replace(/\s+/g, " ") // Collapse repeated spaces
+            .trim(); // Trim surrounding whitespace
         if (!mnemonic) return utils.SendError(res, errorCode.error_lack_param);
         if (!bip39.validateMnemonic(mnemonic))
             return utils.SendError(res, errorCode.error_mnenomic);
@@ -40,13 +40,13 @@ router.post("/create", auth, async (req, res, next) => {
     }
 });
 
-// 删除全部子账户并清空seed和mnemonic
+// Delete all subaccounts and clear the seed and mnemonic
 router.post("/reset", auth, async (req, res, next) => {
     try {
         let user = await utils.GetCurUser(req);
         if (!(await checkPwd(user, req.body.password, true)))
             return utils.SendError(res, errorCode.error_credential);
-        // 删除全部关联的子账户
+        // Delete all related subaccounts
         await Wallet.destroy({ where: { userId: user.id } });
         // Preserve the seed if wallet deletion fails, so addresses can be derived again.
         await User.update(

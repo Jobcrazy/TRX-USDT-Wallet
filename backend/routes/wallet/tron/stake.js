@@ -9,8 +9,7 @@ const { checkPwd } = require("../../../common/payPwd");
 const { positiveSun } = require("../../../common/amount");
 const tronWeb = require("../../../blockchains/tron");
 const Wallet = require("../../../model/wallet");
-
-const MAX_RESULT_SIZE_IN_TX = 75;
+const { estimateFee } = require("../../../blockchains/tron/estimateFee");
 
 router.post("/stake", auth, async (req, res, next) => {
     try {
@@ -22,7 +21,7 @@ router.post("/stake", auth, async (req, res, next) => {
             return utils.SendError(res, errorCode.error_lack_param);
         if (!["freeze", "unfreeze"].includes(type) || !["ENERGY", "BANDWIDTH"].includes(purpose))
             return utils.SendError(res, errorCode.error_form);
-        // 检查密码和secret
+        // Verify the payment password and 2FA secret
         const user = await utils.GetCurUser(req);
         if (!(await checkPwd(user, req.body.password))) {
             return utils.SendError(res, errorCode.error_credential);
@@ -35,7 +34,7 @@ router.post("/stake", auth, async (req, res, next) => {
             return utils.SendError(res, errorCode.error_credential);
         }
 
-        // 开始质押或解押
+        // Stake or unstake
         const wallet = await Wallet.findOne({
             where: { address: address, userId: user.id },
         });
@@ -56,7 +55,7 @@ router.post("/stake", auth, async (req, res, next) => {
                 address
             );
         const signedTx = await tronWebInst.trx.sign(tx);
-        // 广播交易到区块链上
+        // Broadcast the transaction
         const broadcast = await tronWebInst.trx.sendRawTransaction(signedTx);
         if (broadcast.result)
             return utils.SendResult(res, {
@@ -100,15 +99,8 @@ router.post("/estimate", auth, async (req, res, next) => {
             );
         const signedTx = await tronWebInst.trx.sign(tx);
 
-        // 获取目前链上的参数
-        let cost = BigInt(0);
+        // Get current chain parameters
         const resources = await tronWebInst.trx.getAccountResources(address);
-        const bwLeft =
-            (resources.freeNetLimit ? resources.freeNetLimit : 0) -
-            (resources.freeNetUsed ? resources.freeNetUsed : 0);
-        const enLeft =
-            (resources.EnergyLimit ? resources.EnergyLimit : 0) -
-            (resources.EnergyUsed ? resources.EnergyUsed : 0);
         const chainParams = await tronWebInst.trx.getChainParameters();
         const bwPrice = chainParams.find(
             (param) => param.key === "getTransactionFee"
@@ -117,20 +109,10 @@ router.post("/estimate", auth, async (req, res, next) => {
             (param) => param.key === "getEnergyFee"
         ).value;
 
-        // 计算交易的长度
-        let sigLen = 0;
-        for (let i = 0; i < signedTx.signature.length; i++) {
-            sigLen += signedTx.signature[i].length / 2;
-        }
-        const tsLen =
-            signedTx.raw_data_hex.length / 2 + sigLen + MAX_RESULT_SIZE_IN_TX;
+        // Estimate bandwidth fees for this transaction.
+        const cost = await estimateFee(tronWebInst, address, signedTx);
 
-        // 计算带宽消耗，如果发送方的可用带宽不够，则烧掉TRX作为交易费
-        if (bwLeft < tsLen) {
-            cost += BigInt(tsLen * bwPrice);
-        }
-
-        // 计算增加/减少的额度
+        // Calculate the gained or lost resource amount
         let benifit = 0;
         let deduct = 0;
         if (purpose == "ENERGY") {

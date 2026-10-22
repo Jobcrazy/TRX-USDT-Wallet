@@ -1,25 +1,29 @@
 <template>
   <div class="wrapper">
-    <!-- 密码输入框 -->
+    <!-- Password input -->
     <van-password-input
       :value="password"
       :focused="showKeyboard"
       @focus="showKeyboard = true"
       :error-info="errorInfo"
-      :info="props.info"
+      :info="props.info || t('common.enterPayPwd')"
     />
-    <!-- 数字键盘 -->
+    <!-- Numeric keyboard -->
     <van-number-keyboard v-model="password" :show="showKeyboard" @blur="showKeyboard = false" />
   </div>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { ref, watch } from 'vue'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const props = defineProps({
   info: {
     type: String,
-    default: '请输入支付密码'
+    default: ''
   }
 })
 

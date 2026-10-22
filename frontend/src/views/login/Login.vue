@@ -3,11 +3,13 @@
     <van-loading type="spinner" color="#1989fa" size="50"></van-loading>
   </div>
   <van-empty v-if="loadFailed" :description="description">
-    <van-button type="primary" @click="login()" v-if="!errCredential">重新加载</van-button>
+    <van-button type="primary" @click="login()" v-if="!errCredential">{{
+      $t('auth.reload')
+    }}</van-button>
   </van-empty>
   <van-popup v-model:show="showRecoveryPassword" position="bottom" :style="{ height: '80%' }">
     <Password
-      info="生物识别不可用，请输入支付密码"
+      :info="$t('auth.bioFallback')"
       @password="onRecoveryPassword"
       @cancel="cancelRecovery"
     />
@@ -15,6 +17,8 @@
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { ref, onMounted, onUnmounted } from 'vue'
 import { retrieveLaunchParams, biometry } from '@telegram-apps/sdk'
 import request from '@/common/request'
@@ -24,11 +28,13 @@ import { TronWeb } from 'tronweb'
 import Password from '@/components/wallet/Password.vue'
 import { setToken } from '@/common/session'
 
+const { t } = useI18n({ useScope: 'global' })
+
 const router = useRouter()
 const loading = ref(false)
 const loadFailed = ref(false)
 const errCredential = ref(false)
-const description = ref('加载账户信息失败')
+const description = ref(t('auth.loadFailed'))
 const showRecoveryPassword = ref(false)
 
 onMounted(async () => {
@@ -52,11 +58,11 @@ onUnmounted(() => {
 
 function isMobileOS() {
   const userAgent = navigator.userAgent
-  // 判断是否为 Android 系统
+  // Check for Android
   if (/Android/i.test(userAgent)) {
     return true
   }
-  // 判断是否为 iOS 系统
+  // Check for iOS
   if (/iPhone|iPad|iPod/i.test(userAgent)) {
     return true
   }
@@ -70,7 +76,7 @@ const onRecoveryPassword = (password) => {
 
 const cancelRecovery = () => {
   showRecoveryPassword.value = false
-  description.value = '登录需要生物识别或支付密码'
+  description.value = t('auth.authRequired')
   loadFailed.value = true
 }
 
@@ -80,7 +86,7 @@ const login = async (recoveryPassword = null) => {
       fullHost: 'https://api.trongrid.io'
     })
 
-    // 用当前的用户信息去后台取token
+    // Request a session token using the current Telegram user
     loading.value = true
     loadFailed.value = false
     setToken(null)
@@ -93,7 +99,7 @@ const login = async (recoveryPassword = null) => {
     if (res.type === 'biometric_required' && !recoveryPassword) {
       try {
         if (biometry.isSupported() && (await biometry.requestAccess())) {
-          const { status, token } = await biometry.authenticate({ reason: '解锁钱包' })
+          const { status, token } = await biometry.authenticate({ reason: t('auth.unlockWallet') })
           if (status === 'authorized' && token) {
             const saved = JSON.parse(token)
             const secret = saved[initData.user.id]?.secret
@@ -118,13 +124,13 @@ const login = async (recoveryPassword = null) => {
       loading.value = false
       if (recoveryPassword && res.type === 'pay_password') {
         showRecoveryPassword.value = true
-        showToast('支付密码错误或尝试次数过多')
+        showToast(t('auth.badPayPwd'))
         return
       }
       loadFailed.value = true
       if (res.type == 'credential') {
         errCredential.value = true
-        description.value = '登录信息无效'
+        description.value = t('auth.invalidLogin')
         return
       } else {
         showToast(res.message)
@@ -136,11 +142,11 @@ const login = async (recoveryPassword = null) => {
     localStorage.setItem('hasPassword', res.data.hasPassword)
     localStorage.setItem('enable2fa', res.data.enable2fa)
     if (!res.data.biometricEnabled) localStorage.removeItem(`${initData.user.id}:biometric`)
-    // 判断是否有启动参数，有则跳转到对应界面
+    // Route according to the launch parameter
     if (initData.startParam && initData.startParam.length) {
       let params = initData.startParam.split('_')
       if (params.length < 2 || params[0] != 'TRON' || !tronWeb.isAddress(params[1])) {
-        description.value = '非法的启动参数'
+        description.value = t('auth.invalidLaunch')
         loading.value = false
         return
       }

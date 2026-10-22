@@ -1,10 +1,10 @@
 <template>
   <div class="wrapper">
     <van-image :src="tron" class="logo">
-      <template #error>加载失败</template>
+      <template #error>{{ $t('common.failedToLoad') }}</template>
     </van-image>
-    <div class="title">接收TRC20网络代币</div>
-    <div class="desc">同一个地址就能接收TRX和USDT</div>
+    <div class="title">{{ $t('receive.trc20Tokens') }}</div>
+    <div class="desc">{{ $t('receive.sameAddress') }}</div>
     <div class="qrcode-wrapper">
       <canvas class="qrcode" ref="canvas" />
     </div>
@@ -17,12 +17,14 @@
     </div>
 
     <van-button class="send" block type="primary" @click="shareAddress">
-      发送给Telegram联系人
+      {{ $t('receive.sendContact') }}
     </van-button>
   </div>
 </template>
 
 <script setup>
+import { useI18n } from 'vue-i18n'
+
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { backButton, shareURL } from '@telegram-apps/sdk'
@@ -30,6 +32,8 @@ import copy from 'copy-to-clipboard'
 import { showToast } from 'vant'
 import QRCode from 'qrcode'
 import tron from '@/assets/icons/tron.svg'
+
+const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
 const canvas = ref('null')
@@ -43,7 +47,7 @@ onMounted(() => {
   if (backButton.isMounted()) {
     backButton.onClick(backListener)
   }
-  // 读取钱包信息
+  // Load wallet information
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
   QRCode.toCanvas(
     canvas.value,
@@ -73,13 +77,13 @@ const copyAddress = async () => {
   try {
     copy(wallet.value.address)
     showToast({
-      message: '地址已复制到剪贴板',
+      message: t('common.addressCopied'),
       position: 'bottom'
     })
   } catch (error) {
     console.log(error)
     showToast({
-      message: '地址复制失败',
+      message: t('common.copyAddressFailed'),
       position: 'bottom'
     })
   }
@@ -89,7 +93,7 @@ const shareAddress = () => {
   if (backButton.isMounted()) {
     shareURL(
       `https://t.me/TUWalletBot/miniapp?startapp=TRON_${wallet.value.address}`,
-      '麻烦点击这个链接进Telegram小程序, 复制地址之后, 就可以给我发USDT或TRX了👇'
+      t('receive.shareText')
     )
   }
 }
@@ -127,7 +131,7 @@ const shareAddress = () => {
     width: 80%;
     padding: 10px;
     border-radius: 5px;
-    border: 1px solid #c0c0c0; /* 外边框 */
+    border: 1px solid #c0c0c0; /* Outer border */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -136,8 +140,8 @@ const shareAddress = () => {
       width: 80%;
       color: #bbbbbb;
       font-size: 14px;
-      word-wrap: break-word; /* 适用于旧浏览器 */
-      overflow-wrap: break-word; /* 现代浏览器推荐 */
+      word-wrap: break-word; /* Fallback for older browsers */
+      overflow-wrap: break-word; /* Preferred for modern browsers */
     }
     .copy {
       padding: 0 0 0 10px;
