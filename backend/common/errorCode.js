@@ -118,4 +118,29 @@ module.exports = {
         type: "approve",
         message: "Insufficient approved amount",
     },
+    error_near_unavailable: {
+        code: 24,
+        type: "near_unavailable",
+        message: "NEAR Intents is unavailable",
+    },
+    error_quote_expired: {
+        code: 25,
+        type: "quote_expired",
+        message: "Swap quote expired",
+    },
+    error_near_duplicate: {
+        code: 26,
+        type: "near_duplicate",
+        message: "Swap deposit was already submitted",
+    },
+    error_near_mainnet: {
+        code: 27,
+        type: "near_mainnet",
+        message: "NEAR Intents requires TRON mainnet",
+    },
+    error_near_uncertain: {
+        code: 28,
+        type: "near_uncertain",
+        message: "Deposit broadcast status is unknown; check the wallet before retrying",
+    },
 };

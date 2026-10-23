@@ -15,17 +15,30 @@
       </div>
     </van-row>
     <van-form @submit="onSwap">
+      <van-field name="provider" :label="$t('swap.provider')">
+        <template #input>
+          <van-radio-group
+            v-model="provider"
+            direction="horizontal"
+            shape="dot"
+            :disabled="loading || showPassword || show2FACode"
+          >
+            <van-radio name="near">NEAR Intents</van-radio>
+            <van-radio name="sunswap">SunSwap</van-radio>
+          </van-radio-group>
+        </template>
+      </van-field>
       <van-field
         v-model="swapAmount"
         type="number"
-        :disabled="loading"
+        :disabled="loading || showPassword || show2FACode"
         name="amount"
         :label="$t('common.amount')"
         :placeholder="$t('swap.enterTrx')"
         :rules="[{ required: true, message: $t('swap.enterTrx') }]"
       >
         <template #button>
-          <span @click="swapAmount = realTrxBalance">{{ $t('common.all') }}</span>
+          <span @click="setAllAmount">{{ $t('common.all') }}</span>
         </template>
       </van-field>
       <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="swap_etimated">
@@ -99,6 +112,13 @@ const realTrxBalance = ref(0)
 const swapAmount = ref(null)
 const swap_fee = ref(0)
 const tokenGot = ref(0)
+const provider = ref('near')
+const quoteId = ref(null)
+const minAmountOut = ref(null)
+const setAllAmount = () => {
+  if (!loading.value && !showPassword.value && !show2FACode.value)
+    swapAmount.value = realTrxBalance.value
+}
 
 const backListener = () => {
   router.back()
@@ -131,7 +151,7 @@ const loadTron = async () => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       trxBalance.value = utils.numFormat(res.data.balance)
-      realTrxBalance.value = parseFloat(res.data.balance)
+      realTrxBalance.value = res.data.balance
     } else {
       showToast({
         message: res.message,
@@ -189,17 +209,28 @@ const checkSecurity = async () => {
 const estimateSwap = async () => {
   try {
     loading.value = true
-    let res = await request('/api/wallet/tron/swap/trx2usdt/estimate', 'POST', {
-      address: wallet.value.address,
-      amount: swapAmount.value
-    })
+    const isNear = provider.value === 'near'
+    const estimatedAmount = swapAmount.value
+    let res = await request(
+      isNear ? '/api/wallet/tron/near/estimate' : '/api/wallet/tron/swap/trx2usdt/estimate',
+      'POST',
+      {
+        address: wallet.value.address,
+        amount: swapAmount.value,
+        ...(isNear ? { direction: 'trx2usdt' } : {})
+      }
+    )
     loading.value = false
+    if (provider.value !== (isNear ? 'near' : 'sunswap') || swapAmount.value !== estimatedAmount)
+      return
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       swap_etimated.value = true
       swap_fee.value = res.data.cost
       tokenGot.value = res.data.amount
+      quoteId.value = isNear ? res.data.quoteId : null
+      minAmountOut.value = isNear ? res.data.minAmountOut : null
     } else {
       showToast({
         message: res.message,
@@ -220,13 +251,19 @@ const swap = async () => {
   try {
     if (!(await checkSecurity())) return
     loading.value = true
-    let res = await request('/api/wallet/tron/swap/trx2usdt', 'POST', {
-      address: wallet.value.address,
-      amount: swapAmount.value,
-      minAmountOut: tokenGot.value,
-      password: password.value,
-      code: code2fa.value
-    })
+    const isNear = provider.value === 'near'
+    let res = await request(
+      isNear ? '/api/wallet/tron/near/submit' : '/api/wallet/tron/swap/trx2usdt',
+      'POST',
+      {
+        address: wallet.value.address,
+        ...(isNear
+          ? { quoteId: quoteId.value, minAmountOut: minAmountOut.value }
+          : { amount: swapAmount.value, minAmountOut: tokenGot.value }),
+        password: password.value,
+        code: code2fa.value
+      }
+    )
     password.value = null
     code2fa.value = null
     loading.value = false
@@ -242,6 +279,10 @@ const swap = async () => {
         position: 'bottom'
       })
     } else {
+      if (isNear && ['quote_expired', 'near_duplicate', 'near_uncertain'].includes(res.type)) {
+        swap_etimated.value = false
+        quoteId.value = null
+      }
       showToast({
         message: res.message,
         position: 'bottom'
@@ -312,6 +353,16 @@ const cancel2FACode = () => {
 
 watch(swapAmount, async () => {
   swap_etimated.value = false
+  quoteId.value = null
+  minAmountOut.value = null
+})
+
+watch(provider, () => {
+  swap_etimated.value = false
+  quoteId.value = null
+  minAmountOut.value = null
+  password.value = null
+  code2fa.value = null
 })
 </script>
 

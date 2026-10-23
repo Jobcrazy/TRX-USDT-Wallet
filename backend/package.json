@@ -8,6 +8,7 @@
         "debug": "node inspect ./server"
     },
     "dependencies": {
+        "@defuse-protocol/one-click-sdk-typescript": "^0.1.26",
         "@scure/bip32": "^2.4.0",
         "@telegram-apps/init-data-node": "^1.2.2",
         "axios": "^1.4.0",

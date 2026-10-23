@@ -22,7 +22,7 @@ import { useI18n } from 'vue-i18n'
 import { ref, onMounted, onUnmounted } from 'vue'
 import { retrieveLaunchParams, biometry } from '@telegram-apps/sdk'
 import request from '@/common/request'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { TronWeb } from 'tronweb'
 import Password from '@/components/wallet/Password.vue'
@@ -31,6 +31,7 @@ import { setToken } from '@/common/session'
 const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const loadFailed = ref(false)
 const errCredential = ref(false)
@@ -153,6 +154,19 @@ const login = async (recoveryPassword = null) => {
       localStorage.setItem('shared', params[1])
       loading.value = false
       return router.replace({ name: 'Shared' })
+    }
+    const redirect = route.query.redirect
+    if (
+      res.data.inited &&
+      typeof redirect === 'string' &&
+      redirect.startsWith('/') &&
+      !redirect.startsWith('//')
+    ) {
+      const target = router.resolve(redirect)
+      if (target.matched.length && target.name !== 'Login') {
+        loading.value = false
+        return router.replace(redirect)
+      }
     }
     if (res.data.inited) {
       loading.value = false

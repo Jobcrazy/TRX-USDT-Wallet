@@ -1,5 +1,10 @@
 <template>
-  <van-notice-bar left-icon="info-o" color="#1989fa" background="#ecf9ff">
+  <van-notice-bar
+    v-if="provider === 'sunswap'"
+    left-icon="info-o"
+    color="#1989fa"
+    background="#ecf9ff"
+  >
     <template #default>
       <div class="notify">
         <span class="notify_left" @click="showApprove = true">{{
@@ -31,17 +36,30 @@
       </div>
     </van-row>
     <van-form @submit="onSwap">
+      <van-field name="provider" :label="$t('swap.provider')">
+        <template #input>
+          <van-radio-group
+            v-model="provider"
+            direction="horizontal"
+            shape="dot"
+            :disabled="loading || showPassword || show2FACode"
+          >
+            <van-radio name="near">NEAR Intents</van-radio>
+            <van-radio name="sunswap">SunSwap</van-radio>
+          </van-radio-group>
+        </template>
+      </van-field>
       <van-field
         v-model="swapAmount"
         type="number"
-        :disabled="loading"
+        :disabled="loading || showPassword || show2FACode"
         name="amount"
         :label="$t('common.amount')"
         :placeholder="$t('swap.enterUsdt')"
         :rules="[{ required: true, message: $t('swap.enterUsdt') }]"
       >
         <template #button>
-          <span @click="swapAmount = approved">{{ $t('common.all') }}</span>
+          <span @click="setAllAmount">{{ $t('common.all') }}</span>
         </template>
       </van-field>
       <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="swap_etimated">
@@ -60,7 +78,11 @@
           type="primary"
           native-type="submit"
           :loading="loading"
-          :disabled="swapAmount == 0 || swapAmount > realUsdtBalance || swapAmount > approved"
+          :disabled="
+            swapAmount == 0 ||
+            swapAmount > realUsdtBalance ||
+            (provider === 'sunswap' && swapAmount > approved)
+          "
         >
           {{ swap_etimated ? $t('swap.swapToTrx') : $t('swap.estimateSwapFee') }}
         </van-button>
@@ -68,7 +90,7 @@
     </van-form>
   </div>
 
-  <van-overlay :show="showApprove">
+  <van-overlay :show="provider === 'sunswap' && showApprove">
     <div class="approve" @click.stop>
       <div class="block">
         <div class="dlg_title">
@@ -151,6 +173,13 @@ const realUsdtBalance = ref(0)
 const swapAmount = ref(null)
 const swap_fee = ref(0)
 const tokenGot = ref(0)
+const provider = ref('near')
+const quoteId = ref(null)
+const minAmountOut = ref(null)
+const setAllAmount = () => {
+  if (!loading.value && !showPassword.value && !show2FACode.value)
+    swapAmount.value = provider.value === 'near' ? realUsdtBalance.value : approved.value
+}
 let verifyType = ''
 
 const backListener = () => {
@@ -166,7 +195,6 @@ onMounted(() => {
 
   // Load wallet information
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
-  refreshApprove()
   loadTron()
   loadUSDT()
 })
@@ -186,7 +214,7 @@ const loadTron = async () => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       trxBalance.value = utils.numFormat(res.data.balance)
-      realTrxBalance.value = parseFloat(res.data.balance)
+      realTrxBalance.value = res.data.balance
     } else {
       showToast({
         message: res.message,
@@ -207,7 +235,7 @@ const loadUSDT = async () => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       usdtBalance.value = utils.numFormat(res.data.balance)
-      realUsdtBalance.value = parseFloat(res.data.balance)
+      realUsdtBalance.value = res.data.balance
     } else {
       showToast({
         message: res.message,
@@ -405,17 +433,28 @@ const onUpdateApprove = async () => {
 const estimateSwap = async () => {
   try {
     loading.value = true
-    let res = await request('/api/wallet/tron/swap/usdt2trx/estimate', 'POST', {
-      address: wallet.value.address,
-      amount: swapAmount.value
-    })
+    const isNear = provider.value === 'near'
+    const estimatedAmount = swapAmount.value
+    let res = await request(
+      isNear ? '/api/wallet/tron/near/estimate' : '/api/wallet/tron/swap/usdt2trx/estimate',
+      'POST',
+      {
+        address: wallet.value.address,
+        amount: swapAmount.value,
+        ...(isNear ? { direction: 'usdt2trx' } : {})
+      }
+    )
     loading.value = false
+    if (provider.value !== (isNear ? 'near' : 'sunswap') || swapAmount.value !== estimatedAmount)
+      return
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       swap_etimated.value = true
       swap_fee.value = res.data.cost
       tokenGot.value = res.data.amount
+      quoteId.value = isNear ? res.data.quoteId : null
+      minAmountOut.value = isNear ? res.data.minAmountOut : null
     } else {
       showToast({
         message: res.message,
@@ -436,13 +475,19 @@ const swap = async () => {
   try {
     if (!(await checkSecurity())) return
     loading.value = true
-    let res = await request('/api/wallet/tron/swap/usdt2trx', 'POST', {
-      address: wallet.value.address,
-      amount: swapAmount.value,
-      minAmountOut: tokenGot.value,
-      password: password.value,
-      code: code2fa.value
-    })
+    const isNear = provider.value === 'near'
+    let res = await request(
+      isNear ? '/api/wallet/tron/near/submit' : '/api/wallet/tron/swap/usdt2trx',
+      'POST',
+      {
+        address: wallet.value.address,
+        ...(isNear
+          ? { quoteId: quoteId.value, minAmountOut: minAmountOut.value }
+          : { amount: swapAmount.value, minAmountOut: tokenGot.value }),
+        password: password.value,
+        code: code2fa.value
+      }
+    )
     password.value = null
     code2fa.value = null
     loading.value = false
@@ -460,6 +505,10 @@ const swap = async () => {
         position: 'bottom'
       })
     } else {
+      if (isNear && ['quote_expired', 'near_duplicate', 'near_uncertain'].includes(res.type)) {
+        swap_etimated.value = false
+        quoteId.value = null
+      }
       showToast({
         message: res.message,
         position: 'bottom'
@@ -484,10 +533,9 @@ const swap = async () => {
 const onSwap = async () => {
   try {
     const amountSun = toSun(swapAmount.value)
-    if (
-      amountSun.gt(toSun(realUsdtBalance.value, true)) ||
-      amountSun.gt(toSun(approved.value, true))
-    )
+    if (amountSun.gt(toSun(realUsdtBalance.value, true)))
+      return showToast(t('common.insufficientBalance'))
+    if (provider.value === 'sunswap' && amountSun.gt(toSun(approved.value, true)))
       return showToast(t('swap.balanceOrAllowance'))
     verifyType = 'swap'
     if (!swap_etimated.value) return await estimateSwap()
@@ -542,6 +590,18 @@ watch(newApproved, async () => {
 
 watch(swapAmount, async () => {
   swap_etimated.value = false
+  quoteId.value = null
+  minAmountOut.value = null
+})
+
+watch(provider, (value) => {
+  swap_etimated.value = false
+  quoteId.value = null
+  minAmountOut.value = null
+  showApprove.value = false
+  password.value = null
+  code2fa.value = null
+  if (value === 'sunswap') refreshApprove()
 })
 </script>
 

@@ -103,7 +103,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (to.name !== 'Login' && !getToken()) return { name: 'Login' }
+  if (to.name !== 'Login' && !getToken()) return { name: 'Login', query: { redirect: to.fullPath } }
 })
 
 export default router
