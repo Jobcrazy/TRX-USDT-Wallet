@@ -10,6 +10,10 @@ const API = "https://1click.chaindefuser.com/v0";
 const MAINNET_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRX_DECIMALS = 6;
 
+function isApiError(error) {
+    return typeof error.config?.url === "string" && error.config.url.startsWith(`${API}/`);
+}
+
 function headers() {
     const result = { "Content-Type": "application/json" };
     if (process.env.NEAR_INTENTS_API_KEY)
@@ -142,4 +146,4 @@ async function notifyDeposit(address, txid) {
     }
 }
 
-module.exports = { quote, depositTransaction, publicQuote, notifyDeposit };
+module.exports = { quote, depositTransaction, publicQuote, notifyDeposit, isApiError };

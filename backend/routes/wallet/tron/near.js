@@ -31,7 +31,15 @@ router.post("/estimate", auth, async (req, res) => {
         await redis.set(`near:quote:${id}`, JSON.stringify({ userId: user.id, walletId: wallet.id, data }), "EX", ttl);
         return utils.SendResult(res, { quoteId: id, ...near.publicQuote(data, fee) });
     } catch (error) {
-        console.error("1Click estimate failed", error.message);
+        const upstream = error.response?.data;
+        const message = typeof upstream?.message === "string" && upstream.message.trim() ?
+            upstream.message : null;
+        console.error("1Click estimate failed", JSON.stringify({
+            status: error.response?.status,
+            message: message || error.message,
+        }));
+        if (message && near.isApiError(error))
+            return utils.SendError(res, { ...errorCode.error_near_upstream, message });
         return utils.SendError(res, error?.type ? error : errorCode.error_near_unavailable);
     }
 });

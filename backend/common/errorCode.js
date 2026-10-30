@@ -143,4 +143,9 @@ module.exports = {
         type: "near_uncertain",
         message: "Deposit broadcast status is unknown; check the wallet before retrying",
     },
+    error_near_upstream: {
+        code: 29,
+        type: "near_upstream",
+        message: "NEAR Intents rejected the quote",
+    },
 };

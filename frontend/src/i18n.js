@@ -26,6 +26,7 @@ Locale.use(locale, locale === 'zh-CN' ? zhCN : enUS)
 export const t = (key, params) => i18n.global.t(key, params)
 export const localizeApiResponse = (response) => {
   if (!response || response.code === 0) return response
+  if (response.type === 'near_upstream' && typeof response.message === 'string') return response
   const type = Object.prototype.hasOwnProperty.call(english.api, response.type)
     ? response.type
     : 'unknown'
