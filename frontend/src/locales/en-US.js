@@ -132,6 +132,7 @@ export default {
     swapToTrx: 'Swap to TRX',
     swapToUsdt: 'Swap to USDT',
     trxFeeShortage: 'Not enough TRX for network fees. Add some TRX first.',
+    usdValue: 'Approx. USD value',
     updateAllowance: 'Update allowance'
   },
   staking: {

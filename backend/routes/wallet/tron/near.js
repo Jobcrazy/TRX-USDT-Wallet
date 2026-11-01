@@ -16,6 +16,15 @@ const CLAIM_TTL_SECONDS = 600;
 const WALLET_LOCK_SECONDS = 120;
 const RELEASE_LOCK = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
+router.get("/prices", auth, async (req, res) => {
+    try {
+        return utils.SendResult(res, await near.prices());
+    } catch (error) {
+        console.error("1Click prices failed", error.message);
+        return utils.SendError(res, error?.type ? error : errorCode.error_near_unavailable);
+    }
+});
+
 router.post("/estimate", auth, async (req, res) => {
     try {
         const user = await utils.GetCurUser(req);

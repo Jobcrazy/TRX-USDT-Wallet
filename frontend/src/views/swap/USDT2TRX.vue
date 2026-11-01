@@ -62,6 +62,12 @@
           <span @click="setAllAmount">{{ $t('common.all') }}</span>
         </template>
       </van-field>
+      <van-field
+        v-if="provider === 'near' && usdValue"
+        :label="$t('swap.usdValue')"
+        :model-value="'≈ $' + usdValue"
+        readonly
+      />
       <van-notice-bar color="#1989fa" background="#ecf9ff" v-if="swap_etimated">
         {{
           $t('swap.swapEstimate', {
@@ -141,8 +147,9 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import request from '@/common/request'
+import { nearUsd } from '@/common/nearUsd'
 import utils from '@/common/utils'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
@@ -176,6 +183,8 @@ const tokenGot = ref(0)
 const provider = ref('near')
 const quoteId = ref(null)
 const minAmountOut = ref(null)
+const nearPrice = ref(null)
+const usdValue = computed(() => nearUsd(swapAmount.value, nearPrice.value))
 const setAllAmount = () => {
   if (!loading.value && !showPassword.value && !show2FACode.value)
     swapAmount.value = provider.value === 'near' ? realUsdtBalance.value : approved.value
@@ -197,6 +206,7 @@ onMounted(() => {
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
   loadTron()
   loadUSDT()
+  loadNearPrice()
 })
 
 onUnmounted(() => {
@@ -244,6 +254,18 @@ const loadUSDT = async () => {
     }
   } catch (error) {
     console.log(error)
+  }
+}
+
+const loadNearPrice = async () => {
+  nearPrice.value = null
+  try {
+    const res = await request('/api/wallet/tron/near/prices', 'GET')
+    if (res.code && res.type === 'login') return router.replace({ name: 'Login' })
+    if (!res.code) nearPrice.value = res.data.usdt
+    else if (provider.value === 'near') showToast({ message: res.message, position: 'bottom' })
+  } catch (error) {
+    if (provider.value === 'near') showToast({ message: error.message, position: 'bottom' })
   }
 }
 

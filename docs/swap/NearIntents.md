@@ -4,7 +4,7 @@ NEAR Intents 通过 1Click 完成 TRON 主网 TRX/USDT 兑换。页面默认选�
 
 ## 流程
 
-1. 两个现有兑换页调用 `POST /api/wallet/tron/near/estimate`，传入钱包地址、方向和数量。后端从 1Click 资产列表核对 TRX 与主网 USDT，再请求带转入地址的正式报价、验证签名，并估算 TRON 转入费用；USDT 转入模拟缺少有效 Energy 数据时不返回费用估算。
+1. 两个兑换页每次打开时通过 `GET /api/wallet/tron/near/prices` 获取一次价格，仅在选择 NEAR Intents 时按输入金额显示参考美元价值；最低兑换额仍由 1Click 报价判定。点击估算后调用 `POST /api/wallet/tron/near/estimate`，后端核对资产、验证签名，并根据 TRON 模拟转账事件与 Energy 估算转入费用。
 2. 报价在 Redis 中短期保存，绑定用户和钱包；页面展示最低到账量与预计 TRX 费用。改动数量或兑换方式会清除页面报价；加载或输入支付密码、2FA 期间不能通过“全部”按钮改动数量。
 3. 页面调用 `POST /api/wallet/tron/near/submit`，传回报价 ID 和最低到账量。后端校验用户、钱包、报价期限、支付密码及已启用的 2FA，然后从钱包向报价地址转入 TRX 或 USDT。广播成功后尝试把交易哈希通知 1Click；通知失败不改变已提交结果。USDT 转入不使用 SunSwap 授权。
 4. 页面返回上一页，与 SunSwap 一样提示“兑换已提交，请稍后刷新”。

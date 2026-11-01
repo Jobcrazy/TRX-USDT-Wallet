@@ -9,6 +9,7 @@ const { estimateFee } = require("./estimateFee");
 const API = "https://1click.chaindefuser.com/v0";
 const MAINNET_USDT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
 const TRX_DECIMALS = 6;
+const TRANSFER_TOPIC = "ddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
 function isApiError(error) {
     return typeof error.config?.url === "string" && error.config.url.startsWith(`${API}/`);
@@ -33,7 +34,15 @@ async function assets() {
     const usdt = tokens.find((token) => token.blockchain === "tron" &&
         token.symbol === "USDT" && token.contractAddress === MAINNET_USDT && token.decimals === 6);
     if (!trx?.assetId || !usdt?.assetId) throw new Error("TRON pair is unavailable on 1Click");
-    return { trx: trx.assetId, usdt: usdt.assetId };
+    return { trx, usdt };
+}
+
+async function prices() {
+    const pair = await assets();
+    if (![pair.trx.price, pair.usdt.price].every((price) =>
+        typeof price === "number" && Number.isFinite(price) && price > 0))
+        throw new Error("Invalid 1Click token price");
+    return { trx: pair.trx.price, usdt: pair.usdt.price };
 }
 
 async function quote(direction, address, amount) {
@@ -46,9 +55,9 @@ async function quote(direction, address, amount) {
         dry: false,
         swapType: "EXACT_INPUT",
         slippageTolerance: config.get("wallet.swap_slippage_bps"),
-        originAsset: fromTrx ? pair.trx : pair.usdt,
+        originAsset: fromTrx ? pair.trx.assetId : pair.usdt.assetId,
         depositType: "ORIGIN_CHAIN",
-        destinationAsset: fromTrx ? pair.usdt : pair.trx,
+        destinationAsset: fromTrx ? pair.usdt.assetId : pair.trx.assetId,
         amount: units.toString(),
         refundTo: address,
         refundType: "ORIGIN_CHAIN",
@@ -110,9 +119,19 @@ async function depositTransaction(inst, from, quoteData, checkBalance = true) {
     const tx = await inst.transactionBuilder.triggerConstantContract(
         MAINNET_USDT, "transfer(address,uint256)", {}, parameters
     );
+    const contract = inst.address.toHex(MAINNET_USDT).slice(2).toLowerCase();
+    const sender = inst.address.toHex(from).slice(2).toLowerCase().padStart(64, "0");
+    const recipient = inst.address.toHex(to).slice(2).toLowerCase().padStart(64, "0");
+    const value = BigInt(amountUnits).toString(16).padStart(64, "0");
+    // Mainnet USDT may return zero after a successful simulated transfer; verify its event.
+    const transferred = tx?.logs?.some((log) => log.address?.toLowerCase() === contract &&
+        log.topics?.[0]?.toLowerCase() === TRANSFER_TOPIC &&
+        log.topics?.[1]?.toLowerCase() === sender &&
+        log.topics?.[2]?.toLowerCase() === recipient &&
+        log.data?.toLowerCase() === value);
     if (!tx?.result?.result || !tx.transaction ||
         !Number.isSafeInteger(tx.energy_used) || tx.energy_used <= 0 ||
-        (tx.constant_result?.[0] && BigInt(`0x${tx.constant_result[0]}`) === 0n))
+        !transferred)
         throw new Error("USDT deposit simulation failed");
     const signedEstimate = await inst.trx.sign(tx.transaction);
     const fee = await estimateFee(inst, from, signedEstimate, { energyUsed: tx.energy_used });
@@ -146,4 +165,4 @@ async function notifyDeposit(address, txid) {
     }
 }
 
-module.exports = { quote, depositTransaction, publicQuote, notifyDeposit, isApiError };
+module.exports = { quote, prices, depositTransaction, publicQuote, notifyDeposit, isApiError };

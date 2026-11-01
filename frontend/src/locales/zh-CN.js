@@ -130,6 +130,7 @@ export default {
     swapToTrx: '兑换成TRX',
     swapToUsdt: '兑换成USDT',
     trxFeeShortage: 'Gas不足, 请先充一些TRX',
+    usdValue: '参考美元价值',
     updateAllowance: '更新授权额度'
   },
   staking: {
