@@ -12,7 +12,7 @@
           <div class="name">{{ wallet.subtype == 'trx' ? 'Tron' : 'Tether' }}</div>
         </div>
         <div class="right">
-          <div class="amount">{{ wallet.balance }}</div>
+          <div class="amount">{{ utils.fixedFormat(wallet.balance ?? 0) }}</div>
           <div class="token">TRX</div>
         </div>
       </div>
@@ -51,7 +51,7 @@
               </div>
               <div class="amount">
                 {{
-                  utils.numFormat(
+                  utils.fixedFormat(
                     parseInt(transaction.raw_data.contract[0].parameter.value.amount) / 10 ** 6
                   )
                 }}
@@ -225,7 +225,7 @@ const loadTron = async () => {
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      wallet.value.balance = utils.numFormat(res.data.balance)
+      wallet.value.balance = res.data.balance
     } else {
       showToast({
         message: res.message,

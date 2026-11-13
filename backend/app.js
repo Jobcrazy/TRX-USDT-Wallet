@@ -13,6 +13,8 @@ const nearSwapRouter = require("./routes/wallet/tron/near");
 const tronStakeRouter = require("./routes/wallet/tron/stake");
 const trxRouter = require("./routes/wallet/tron/tokens/trx");
 const usdtRouter = require("./routes/wallet/tron/tokens/usdt");
+const bscRouter = require("./routes/wallet/bsc");
+const bscTokensRouter = require("./routes/wallet/bsc/tokens");
 const app = express();
 
 app.set("trust proxy", config.get("http.trusted_proxy_hops"));
@@ -44,4 +46,6 @@ app.use("/api/wallet/tron/near", nearSwapRouter);
 app.use("/api/wallet/tron/stake", tronStakeRouter);
 app.use("/api/wallet/tron/trx", trxRouter);
 app.use("/api/wallet/tron/usdt", usdtRouter);
+app.use("/api/wallet/bsc", bscRouter);
+app.use("/api/wallet/bsc", bscTokensRouter);
 module.exports = app;

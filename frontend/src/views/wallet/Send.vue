@@ -117,7 +117,7 @@ const address_to = ref('')
 const selectedType = ref([])
 const amount = ref(undefined)
 const loading = ref(false)
-const balance = ref(0)
+const balance = ref('0.000000')
 let balanceAmount = 0
 const estimated = ref(false)
 const fee = ref(0)
@@ -140,7 +140,7 @@ const onSelectConfirm = ({ selectedOptions }) => {
   showPicker.value = false
   subtype.value = selectedOptions[0].value
   subtypeTxt.value = selectedOptions[0].text
-  balance.value = 0
+  balance.value = '0.000000'
   balanceAmount = 0
 
   // Get the balance
@@ -385,7 +385,7 @@ const loadTron = async () => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       if (subtype.value !== 'trx') return
-      balance.value = utils.numFormat(res.data.balance)
+      balance.value = utils.fixedFormat(res.data.balance, 6)
       balanceAmount = res.data.balance
     } else {
       showToast({
@@ -413,7 +413,7 @@ const loadUSDT = async () => {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
       if (subtype.value !== 'usdt') return
-      balance.value = utils.numFormat(res.data.balance)
+      balance.value = utils.fixedFormat(res.data.balance, 6)
       balanceAmount = res.data.balance
     } else {
       showToast({

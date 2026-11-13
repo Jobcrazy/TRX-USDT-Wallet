@@ -77,6 +77,8 @@ export default {
     wallet: '钱包'
   },
   wallet: {
+    network: '网络',
+    priceUnavailable: '暂无 USDT 估值',
     create: '创建',
     createNow: '立刻创建',
     createSubaccount: '创建子账户',
@@ -100,6 +102,10 @@ export default {
     usdtToTrx: 'USDT转TRX'
   },
   transfer: {
+    bscFeeEstimate: '预计网络手续费：{fee} BNB',
+    invalidBscAddress: '请输入有效的 BNB Smart Chain 地址',
+    scanBscAddress: '扫描 BNB Smart Chain 地址',
+    submitted: '转账已提交',
     address: '地址',
     balanceAndFee: '余额不足以支付转账金额和手续费',
     enterAddress: '请输入地址或扫描二维码',
@@ -162,6 +168,9 @@ export default {
     transfersOnly: '暂时只支持查看转账类型的交易记录'
   },
   receive: {
+    bscAddress: 'BNB Smart Chain 地址',
+    bscTokens: '接收 BNB 和 BEP-20 代币',
+    bscSameAddress: '此地址可接收 BNB 和 BSC USDT',
     createWallet: '创建我自己的妙蛙钱包',
     forwardContact: '转发给Telegram联系人',
     miniAppHint: '妙蛙钱包是Telegram小程序, 无需安装即可使用',
@@ -173,6 +182,7 @@ export default {
     trc20Tokens: '接收TRC20网络代币'
   },
   api: {
+    token_unavailable: '此网络尚未配置该代币',
     '2fa_bind': '双因素验证已开启',
     '2fa_secret': '双因素验证码无效',
     address_owner: '钱包地址无效',

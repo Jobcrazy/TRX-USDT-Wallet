@@ -118,6 +118,11 @@ module.exports = {
         type: "approve",
         message: "Insufficient approved amount",
     },
+    error_token_unavailable: {
+        code: 34,
+        type: "token_unavailable",
+        message: "Token is not configured on this network",
+    },
     error_near_unavailable: {
         code: 24,
         type: "near_unavailable",

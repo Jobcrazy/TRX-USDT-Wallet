@@ -5,50 +5,64 @@
       :editable="true"
       :copyable="true"
       :clickable="false"
-      :info="true"
-      :show-stake="true"
+      :info="!isBsc"
+      :show-stake="!isBsc"
       :timestamp="timestamp"
     />
     <div class="actions">
-      <van-grid direction="vertical" :column-num="4">
+      <van-grid direction="vertical" :column-num="isBsc ? 3 : 4">
         <van-grid-item
           icon="guide-o"
           :text="$t('wallet.send')"
-          @click="router.push({ name: 'Send' })"
+          @click="router.push({ name: isBsc ? 'BscSend' : 'Send' })"
         />
         <van-grid-item
           icon="down"
           :text="$t('wallet.receive')"
           @click="router.push({ name: 'Receive' })"
         />
-        <van-grid-item icon="exchange" :text="$t('wallet.swap')" @click="showSwap = true" />
+        <van-grid-item
+          v-if="!isBsc"
+          icon="exchange"
+          :text="$t('wallet.swap')"
+          @click="showSwap = true"
+        />
         <van-grid-item icon="replay" :text="$t('common.refresh')" @click="onRefresh" />
       </van-grid>
     </div>
     <van-row class="listWapper">
-      <div class="item" @click="enterHistory('trx')">
-        <div class="left">
-          <van-image :src="tron" class="logo">
-            <template #error>{{ $t('common.failedToLoad') }}</template>
-          </van-image>
-          <div class="name">TRX</div>
-        </div>
-        <div class="right">
-          <div class="amount">{{ trx }}</div>
-        </div>
-      </div>
+      <AssetRow
+        :icon="isBsc ? bnb : tron"
+        :name="isBsc ? 'BNB' : 'TRX'"
+        :balance="nativeBalance"
+        :decimals="isBsc ? 6 : 2"
+        :fixed-decimals="!isBsc"
+        :small-amount="isBsc"
+        :show-value="true"
+        :rate="rate"
+        @click="enterHistory(isBsc ? 'bnb' : 'trx')"
+      />
       <div class="divider" />
-      <div class="item" @click="enterHistory('usdt')">
-        <div class="left">
-          <van-image :src="tether" class="logo">
-            <template #error>{{ $t('common.failedToLoad') }}</template>
-          </van-image>
-          <div class="name">USDT</div>
-        </div>
-        <div class="right">
-          <div class="amount">{{ usdt }}</div>
-        </div>
-      </div>
+      <AssetRow
+        :icon="tether"
+        name="USDT"
+        :balance="usdt"
+        :decimals="2"
+        @click="enterHistory('usdt')"
+      />
+      <template v-if="isBsc">
+        <template v-for="asset in extraAssets" :key="asset.symbol">
+          <div class="divider" />
+          <AssetRow
+            :icon="asset.icon"
+            :name="asset.symbol"
+            :balance="extraBalances[asset.symbol]"
+            :decimals="2"
+            :show-value="true"
+            :rate="extraRates[asset.symbol]"
+          />
+        </template>
+      </template>
     </van-row>
   </div>
 
@@ -64,23 +78,34 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { TronWeb } from 'tronweb'
 import { backButton } from '@telegram-apps/sdk'
 import { useRouter } from 'vue-router'
 import request from '@/common/request'
-import utils from '@/common/utils'
 import Card from '@/components/wallet/Card.vue'
+import AssetRow from '@/components/wallet/AssetRow.vue'
 import { closeToast, showLoadingToast, showToast } from 'vant'
 import tron from '@/assets/icons/tron.svg'
+import bnb from '@/assets/icons/bnb.svg'
 import tether from '@/assets/icons/tether.svg'
+import intcb from '@/assets/icons/intcb.png'
+import nvdab from '@/assets/icons/nvdab.png'
 
 const { t } = useI18n({ useScope: 'global' })
 
 const router = useRouter()
 const wallet = ref(null)
-const trx = ref(0)
-const usdt = ref(0)
+const nativeBalance = ref('0')
+const usdt = ref('0')
+const rate = ref(null)
+const extraAssets = [
+  { symbol: 'INTCB', icon: intcb },
+  { symbol: 'NVDAB', icon: nvdab }
+]
+const extraBalances = ref({ INTCB: null, NVDAB: null })
+const extraRates = ref({ INTCB: null, NVDAB: null })
+const isBsc = computed(() => wallet.value?.blockchain === 'bsc')
 const loading = ref(false)
 const timestamp = ref(0)
 
@@ -98,8 +123,11 @@ onMounted(() => {
   wallet.value = localStorage.getItem('wallet') ? JSON.parse(localStorage.getItem('wallet')) : null
 
   // Load balances for each wallet
-  loadTron()
+  if (!wallet.value) return router.replace({ name: 'Home' })
+  loadNative()
   loadUSDT()
+  if (isBsc.value) loadExtras()
+  loadPrice()
 })
 
 const onRefresh = async () => {
@@ -111,8 +139,10 @@ const onRefresh = async () => {
   try {
     loading.value = true
     timestamp.value = new Date().getTime()
-    await loadTron()
+    await loadNative()
     await loadUSDT()
+    if (isBsc.value) await loadExtras()
+    await loadPrice()
     loading.value = false
     closeToast()
   } catch (error) {
@@ -122,12 +152,13 @@ const onRefresh = async () => {
 }
 
 const enterHistory = (subtype) => {
+  if (isBsc.value) return
   const tronWeb = new TronWeb({
     fullHost: 'https://api.trongrid.io'
   })
   wallet.value.trxAddr = tronWeb.address.toHex(wallet.value.address)
   wallet.value.subtype = subtype
-  wallet.value.balance = subtype == 'trx' ? trx.value : usdt.value
+  wallet.value.balance = subtype == 'trx' ? nativeBalance.value : usdt.value
   localStorage.setItem('wallet', JSON.stringify(wallet.value))
   switch (subtype) {
     case 'trx':
@@ -147,15 +178,15 @@ onUnmounted(() => {
   }
 })
 
-const loadTron = async () => {
+const loadNative = async () => {
   try {
-    let res = await request('/api/wallet/tron/trx/balance', 'POST', {
+    let res = await request(`/api/wallet/${isBsc.value ? 'bsc/bnb' : 'tron/trx'}/balance`, 'POST', {
       address: wallet.value.address
     })
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      trx.value = utils.numFormat(res.data.balance)
+      nativeBalance.value = res.data.balance
     } else {
       showToast({
         message: res.message,
@@ -169,13 +200,13 @@ const loadTron = async () => {
 
 const loadUSDT = async () => {
   try {
-    let res = await request('/api/wallet/tron/usdt/balance', 'POST', {
+    let res = await request(`/api/wallet/${isBsc.value ? 'bsc' : 'tron'}/usdt/balance`, 'POST', {
       address: wallet.value.address
     })
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      usdt.value = utils.numFormat(res.data.balance)
+      usdt.value = res.data.balance
     } else {
       showToast({
         message: res.message,
@@ -184,6 +215,36 @@ const loadUSDT = async () => {
     }
   } catch (error) {
     console.log(error)
+  }
+}
+
+const loadExtras = async () => {
+  await Promise.all(
+    extraAssets.map(async ({ symbol }) => {
+      try {
+        const res = await request(`/api/wallet/bsc/${symbol.toLowerCase()}/balance`, 'POST', {
+          address: wallet.value.address
+        })
+        if (res.code && res.type === 'login') return router.replace({ name: 'Login' })
+        extraBalances.value[symbol] = res.code ? null : res.data.balance
+      } catch {
+        extraBalances.value[symbol] = null
+      }
+    })
+  )
+}
+
+const loadPrice = async () => {
+  try {
+    const res = await request('/api/wallet/prices', 'POST')
+    rate.value = res.code ? null : res.data[isBsc.value ? 'bnb' : 'trx']
+    extraRates.value = {
+      INTCB: res.code ? null : (res.data.intcb ?? null),
+      NVDAB: res.code ? null : (res.data.nvdab ?? null)
+    }
+  } catch {
+    rate.value = null
+    extraRates.value = { INTCB: null, NVDAB: null }
   }
 }
 
@@ -218,37 +279,6 @@ const onSwapAction = (action) => {
   padding: 5px 15px;
   display: flex;
   flex-direction: column;
-  .item {
-    display: flex;
-    width: 100%;
-    padding: 10px 0;
-    .left {
-      display: flex;
-      flex-grow: 1;
-      align-items: center;
-      .logo {
-        width: 42px;
-        height: 42px;
-      }
-      .name {
-        padding-left: 12px;
-        font-size: 18px;
-      }
-    }
-    .right {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: end;
-      .amount {
-        font-size: 24px;
-      }
-      .token {
-        font-size: 12px;
-        color: #c9c9c9;
-      }
-    }
-  }
   .divider {
     height: 1px;
     background-color: #f9f9f9;

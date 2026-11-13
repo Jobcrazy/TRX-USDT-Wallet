@@ -1,3 +1,5 @@
+import Decimal from 'decimal.js'
+
 let utils = {
   getDomain() {
     return ''
@@ -42,6 +44,16 @@ let utils = {
 
     // Join the integer and fractional parts
     return decimalPart ? `${formattedInteger}.${decimalPart}` : formattedInteger
+  },
+  fixedFormat(number, digits = 2) {
+    const amount = new Decimal(String(number).replace(/,/g, ''))
+    return this.numFormat(amount.toFixed(digits, Decimal.ROUND_DOWN), digits)
+  },
+  formatAsset(value) {
+    const amount = new Decimal(value)
+    if (amount.gt(0) && amount.lt('0.000001')) return '<0.000001'
+    const short = amount.toFixed(6, Decimal.ROUND_DOWN).replace(/\.?0+$/, '')
+    return this.numFormat(short, 6)
   }
 }
 

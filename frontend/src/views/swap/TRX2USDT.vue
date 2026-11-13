@@ -160,7 +160,7 @@ const loadTron = async () => {
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      trxBalance.value = utils.numFormat(res.data.balance)
+      trxBalance.value = utils.fixedFormat(res.data.balance)
       realTrxBalance.value = res.data.balance
     } else {
       showToast({

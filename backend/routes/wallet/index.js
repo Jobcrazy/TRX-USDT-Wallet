@@ -7,6 +7,15 @@ const errorCode = require("../../common/errorCode");
 const { checkPwd } = require("../../common/payPwd");
 const User = require("../../model/user");
 const Wallet = require("../../model/wallet");
+const prices = require("../../common/prices");
+
+router.post("/prices", auth, async (req, res) => {
+    try {
+        utils.SendResult(res, await prices.rates());
+    } catch (error) {
+        utils.SendResult(res, prices.emptyRates());
+    }
+});
 
 router.post("/create", auth, async (req, res, next) => {
     try {

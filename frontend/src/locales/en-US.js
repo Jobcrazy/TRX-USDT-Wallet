@@ -79,6 +79,8 @@ export default {
     wallet: 'Wallet'
   },
   wallet: {
+    network: 'Network',
+    priceUnavailable: 'USDT value unavailable',
     create: 'Create',
     createNow: 'Create now',
     createSubaccount: 'Create subaccount',
@@ -102,6 +104,10 @@ export default {
     usdtToTrx: 'USDT to TRX'
   },
   transfer: {
+    bscFeeEstimate: 'Estimated network fee: {fee} BNB',
+    invalidBscAddress: 'Enter a valid BNB Smart Chain address',
+    scanBscAddress: 'Scan a BNB Smart Chain address',
+    submitted: 'Transfer submitted',
     address: 'Address',
     balanceAndFee: 'Insufficient balance for the transfer and network fee',
     enterAddress: 'Enter an address or scan a QR code',
@@ -164,6 +170,9 @@ export default {
     transfersOnly: 'Only transfer history is currently supported'
   },
   receive: {
+    bscAddress: 'BNB Smart Chain address',
+    bscTokens: 'Receive BNB and BEP-20 tokens',
+    bscSameAddress: 'This address receives BNB and BSC USDT',
     createWallet: 'Create my own MiaoWa Wallet',
     forwardContact: 'Forward to a Telegram contact',
     miniAppHint: 'MiaoWa Wallet is a Telegram mini app. No installation is needed.',
@@ -175,6 +184,7 @@ export default {
     trc20Tokens: 'Receive TRC20 tokens'
   },
   api: {
+    token_unavailable: 'Token is not configured on this network',
     '2fa_bind': 'Two-factor verification is already enabled',
     '2fa_secret': 'Invalid two-factor code',
     address_owner: 'Invalid wallet address',

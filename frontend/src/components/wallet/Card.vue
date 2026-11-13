@@ -1,15 +1,35 @@
 <template>
-  <div class="wallet" @click.stop="onClick">
+  <div
+    class="wallet"
+    :class="{ bsc: props.wallet.blockchain === 'bsc' }"
+    :style="props.backgroundColor ? { backgroundColor: props.backgroundColor } : undefined"
+    @click.stop="onClick"
+  >
     <div class="top">
       <div class="name">
         {{ orgAlias }}
+      </div>
+      <div class="network">
+        <img
+          :src="props.wallet.blockchain === 'bsc' ? bnb : tron"
+          alt=""
+          class="chain-icon"
+          :class="{ 'tron-icon': props.wallet.blockchain !== 'bsc' }"
+        />
+        {{ props.wallet.blockchain === 'bsc' ? 'BNB' : 'TRON' }}
       </div>
       <div class="rename" v-if="props.editable">
         <van-icon name="records-o" size="1.5rem" @click.stop="showRename = true" />
       </div>
     </div>
     <div class="middle">
-      <div class="address">{{ props.wallet.address }}</div>
+      <div class="address" :title="props.wallet.address">
+        <template v-if="props.wallet.blockchain === 'bsc'">
+          <span class="address-start">{{ props.wallet.address.slice(0, -6) }}</span>
+          <span class="address-end">{{ props.wallet.address.slice(-6) }}</span>
+        </template>
+        <template v-else>{{ props.wallet.address }}</template>
+      </div>
       <div class="copy" v-if="props.copyable">
         <van-icon name="notes-o" size="1.5rem" @click.stop="copyAddress" />
       </div>
@@ -90,6 +110,8 @@ import utils from '@/common/utils'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import copy from 'copy-to-clipboard'
+import bnb from '@/assets/icons/bnb.svg'
+import tron from '@/assets/icons/tron.svg'
 
 const { t } = useI18n({ useScope: 'global' })
 
@@ -121,6 +143,10 @@ const props = defineProps({
   timestamp: {
     type: Number,
     default: 0
+  },
+  backgroundColor: {
+    type: String,
+    default: ''
   }
 })
 
@@ -135,9 +161,8 @@ const alias = ref('')
 const showRename = ref(false)
 const loading = ref(false)
 const orgAlias = ref('')
-const stakedEnergy = ref(0)
-const stakedBandwidth = ref(0)
-
+const stakedEnergy = ref('0.00')
+const stakedBandwidth = ref('0.00')
 onMounted(() => {
   if (props.info) loadData()
   if (props.showStake) refreshStaked()
@@ -210,7 +235,7 @@ const onSubmit = async () => {
       return
     }
     loading.value = true
-    let res = await request('/api/wallet/tron/rename', 'POST', {
+    let res = await request(`/api/wallet/${props.wallet.blockchain}/rename`, 'POST', {
       id: props.wallet.id,
       alias: alias.value,
       userId: props.wallet.userId
@@ -248,9 +273,9 @@ const refreshStaked = async () => {
       for (let index = 0; index < res.data.frozenV2.length; index++) {
         const staked = res.data.frozenV2[index]
         if (!staked.type || staked.type == '' || staked.type == 'BANDWIDTH') {
-          stakedBandwidth.value = utils.numFormat((staked.amount ?? 0) / 10 ** 6)
+          stakedBandwidth.value = utils.fixedFormat((staked.amount ?? 0) / 10 ** 6)
         } else if (staked.type == 'ENERGY') {
-          stakedEnergy.value = utils.numFormat((staked.amount ?? 0) / 10 ** 6)
+          stakedEnergy.value = utils.fixedFormat((staked.amount ?? 0) / 10 ** 6)
         }
       }
     } else {
@@ -285,6 +310,28 @@ watch(
   color: white;
 }
 
+.wallet.bsc {
+  background-color: #0b0e11;
+  .network {
+    color: #f0b90b;
+  }
+  .address {
+    flex: 1;
+    display: flex;
+    padding-right: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    .address-start {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .address-end {
+      flex-shrink: 0;
+    }
+  }
+}
+
 .top {
   padding-bottom: 10px;
   display: flex;
@@ -293,6 +340,24 @@ watch(
 
   .name {
     font-size: 28px;
+  }
+  .network {
+    margin-left: auto;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    .chain-icon {
+      width: 24px;
+      height: 24px;
+    }
+    .tron-icon {
+      width: 18px;
+      height: 18px;
+      margin: 3px;
+      filter: brightness(0) invert(1);
+    }
   }
 }
 
@@ -304,6 +369,8 @@ watch(
   .address {
     font-size: 14px;
     flex-grow: 1;
+    overflow-wrap: anywhere;
+    min-width: 0;
   }
 }
 

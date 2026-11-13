@@ -24,6 +24,17 @@
         "cron_timeout_ms": 5000,
         "trusted_proxy_hops": 1
     },
+    "pricing": {
+        "spot_url": "https://data-api.binance.vision/api/v3/ticker/price",
+        "spot_pairs": {
+            "trx": "TRXUSDT",
+            "bnb": "BNBUSDT",
+            "intcb": "INTCBUSDT",
+            "nvdab": "NVDABUSDT"
+        },
+        "timeout_ms": 10000,
+        "cache_ms": 60000
+    },
     "development": {
         "db": {
             "mysql": {
@@ -56,6 +67,11 @@
                     "factory": "THomLGMLhAjMecQf9FQjbZ8a1RtwsZLrGE",
                     "router": "TMn1qrmYUMSTXo9babrJLzepKZoPC7M6Sy"
                 }
+            },
+            "bsc": {
+                "rpc_url": "https://bsc-testnet-dataseed.bnbchain.org",
+                "chain_id": 97,
+                "tokens": { "usdt": null, "intcb": null, "nvdab": null }
             }
         },
         "telegram": {
@@ -95,6 +111,15 @@
                 "sunswap": {
                     "factory": "TKWJdrQkqHisa1X8HUdHEfREvTzw4pMAaY",
                     "router": "TXF1xDbVGdxFGbovmmmXvBGu8ZiE3Lq4mR"
+                }
+            },
+            "bsc": {
+                "rpc_url": "https://bsc-dataseed.bnbchain.org",
+                "chain_id": 56,
+                "tokens": {
+                    "usdt": "0x55d398326f99059ff775485246999027b3197955",
+                    "intcb": "0xe614e2fc6c787035ff51f452e8e826bfd32d5283",
+                    "nvdab": "0x02fca66c1d1afb4e2a7884261eb00f63598a7436"
                 }
             }
         },

@@ -2,8 +2,8 @@
   <van-pull-refresh v-model="refreshing" @refresh="onRefresh" class="wallets">
     <van-list :loading="loading" :finished="finished" finished-text="" @load="onLoad">
       <Card
-        v-for="(wallet, index) in wallets"
-        :key="index"
+        v-for="wallet in wallets"
+        :key="wallet.id"
         :wallet="wallet"
         :copyable="true"
         :clickable="true"
@@ -26,6 +26,13 @@
         <van-form @submit="onSubmit">
           <van-cell-group inset>
             <van-field
+              :model-value="chain === 'bsc' ? 'BNB' : 'TRON'"
+              :label="$t('wallet.network')"
+              is-link
+              readonly
+              @click="showChain = true"
+            />
+            <van-field
               v-model="alias"
               maxlength="10"
               :placeholder="$t('wallet.uniqueAlias')"
@@ -41,6 +48,15 @@
       </div>
     </div>
   </van-overlay>
+
+  <van-popup v-model:show="showChain" position="bottom">
+    <van-picker
+      :columns="chainOptions"
+      :model-value="[chain]"
+      @confirm="onSelectChain"
+      @cancel="showChain = false"
+    />
+  </van-popup>
 </template>
 
 <script setup>
@@ -57,6 +73,17 @@ const refreshing = ref(false)
 const finished = ref(false)
 const showCreate = ref(false)
 const alias = ref('')
+const chain = ref('tron')
+const showChain = ref(false)
+const chainOptions = [
+  { text: 'TRON', value: 'tron' },
+  { text: 'BNB', value: 'bsc' }
+]
+
+const onSelectChain = ({ selectedOptions }) => {
+  chain.value = selectedOptions[0].value
+  showChain.value = false
+}
 
 onMounted(() => {
   onRefresh()
@@ -75,21 +102,23 @@ const onRefresh = () => {
 const onLoad = async () => {
   try {
     loading.value = true
-    let res = await request('/api/wallet/tron/list', 'POST', {
-      page,
-      limit
-    })
+    const [tron, bsc] = await Promise.all([
+      request('/api/wallet/tron/list', 'POST', { page, limit }),
+      request('/api/wallet/bsc/list', 'POST', { page, limit })
+    ])
+    const res = tron.code ? tron : bsc
     refreshing.value = false
     loading.value = false
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
+      const rows = [...tron.data.walles, ...bsc.data.walles]
       if (page == 1) {
-        wallets.value = res.data.walles
+        wallets.value = rows
       } else {
-        wallets.value = [...wallets.value, ...res.data.walles]
+        wallets.value = [...wallets.value, ...rows]
       }
-      if (res.data.walles.length == 0) {
+      if (tron.data.walles.length < limit && bsc.data.walles.length < limit) {
         finished.value = true
       }
       page++
@@ -118,7 +147,7 @@ const onSubmit = async () => {
   try {
     loading.value = true
     showCreate.value = false
-    let res = await request('/api/wallet/tron/create', 'POST', {
+    let res = await request(`/api/wallet/${chain.value}/create`, 'POST', {
       alias: alias.value
     })
     alias.value = ''

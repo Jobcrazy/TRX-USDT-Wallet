@@ -372,7 +372,7 @@ const loadTron = async () => {
     if (res.code && res.type == 'login') {
       return router.replace({ name: 'Login' })
     } else if (!res.code) {
-      balance.value = utils.numFormat(res.data.balance)
+      balance.value = utils.fixedFormat(res.data.balance)
       balanceAmount = res.data.balance * 10 ** 6
     } else {
       showToast({
@@ -433,11 +433,11 @@ const loadStaked = async (type) => {
       for (let index = 0; index < res.data.frozenV2.length; index++) {
         const staked = res.data.frozenV2[index]
         if ((!staked.type || staked.type == '') && type == 'BANDWIDTH') {
-          balance.value = utils.numFormat(staked.amount / 10 ** 6)
+          balance.value = utils.fixedFormat(staked.amount / 10 ** 6)
           balanceAmount = staked.amount
           return
         } else if (staked.type == 'ENERGY' && type == 'ENERGY') {
-          balance.value = utils.numFormat(staked.amount / 10 ** 6)
+          balance.value = utils.fixedFormat(staked.amount / 10 ** 6)
           balanceAmount = staked.amount
           return
         }

@@ -56,6 +56,7 @@ router.post("/rename", auth, async (req, res, next) => {
             {
                 where: {
                     id: req.body.id,
+                    blockchain: "tron",
                     userId: user.id,
                 },
             }

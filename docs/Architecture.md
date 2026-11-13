@@ -1,6 +1,6 @@
 # 项目架构
 
-妙蛙钱包是运行在 Telegram 内的 TRON 钱包：Vue 前端通过 HTTP API 访问 Express 后端，后端在 MySQL 保存用户和钱包数据，通过 TronWeb 与 TRON 节点交互；Redis 用于短期安全与兑换状态。当前实现由服务端保存助记词、种子和私钥，并在服务端签名交易。
+妙蛙钱包是 Telegram 内的 TRON 与 BNB Smart Chain 钱包：Vue 前端调用 Express API，后端在 MySQL 保存用户及钱包、在 Redis 保存临时状态，并使用 TronWeb 和 ethers 访问各自的链。助记词、种子和私钥由服务端保存并用于签名。
 
 ## 组件与依赖
 
@@ -35,3 +35,9 @@ Telegram Mini App
 - MySQL 是用户、会话 token、助记词/种子和钱包密钥的持久存储；Redis 保存 2FA、NEAR Intents 报价和重复提交控制等临时状态。前端 token 仅保存在运行时内存；刷新受保护页面时重新完成 Telegram 登录，并返回刷新前的路由。
 - `backend/config/default.json` 按 `PHASE=production` 选择生产配置，否则使用开发配置，包含数据库、Redis、Telegram 和 TRON 参数；其中的凭据与链地址属于部署配置，不应复制进架构文档。
 - 开发时 Vite 将 `/api` 代理到本地 `3000` 端口；后端默认监听 `PORT` 或 `3000`。数据模型启动时通过 `sequelize.sync({ alter: true })` 同步。生产环境需提供同源 API 路由，并将前端页面路径回退到 `index.html`，以支持直接打开或刷新页面。
+
+## BNB Smart Chain
+
+BSC 账户沿用用户种子，按 `m/44'/60'/0'/0/index` 派生；`/api/wallet/bsc` 负责建户和列表，`/api/wallet/bsc/{bnb,usdt,intcb,nvdab}` 负责余额、费用估算与转账。转账验证付款密码和已启用的 2FA。前端保留统一钱包列表，BSC 发送页独立于 TRON。
+
+RPC、链 ID、代币合约和估值源由 `backend/config/default.json` 配置。开发环境使用 BSC 测试网，代币合约需自行配置；测试网资产不显示主网价格。TRX、BNB、INTCB 与 NVDAB 的估值采用 Binance 现货 USDT 最新成交价，报价不可用时显示暂无估值。BSC 显示 BNB、USDT、INTCB 与 NVDAB，不提供质押、兑换或交易历史。

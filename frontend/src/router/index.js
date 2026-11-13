@@ -9,6 +9,7 @@ const Freeze = () => import('@/views/wallet/Freeze.vue')
 const Receive = () => import('@/views/wallet/Receive.vue')
 const Shared = () => import('@/views/wallet/Shared.vue')
 const Send = () => import('@/views/wallet/Send.vue')
+const BscSend = () => import('@/views/wallet/BscSend.vue')
 const USDT = () => import('@/views/wallet/USDT.vue')
 const TRX = () => import('@/views/wallet/TRX.vue')
 const Settings = () => import('@/views/settings/Settings.vue')
@@ -45,6 +46,7 @@ const routes = [
     path: '/send',
     component: Send
   },
+  { name: 'BscSend', path: '/bsc/send', component: BscSend },
   {
     name: 'USDT',
     path: '/usdt',

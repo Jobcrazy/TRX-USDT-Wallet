@@ -5,10 +5,12 @@
     </van-notice-bar>
 
     <div class="wrapper">
-      <van-image :src="tron" class="logo">
+      <van-image :src="sharedChain === 'BSC' ? bnb : tron" class="logo">
         <template #error>{{ $t('common.failedToLoad') }}</template>
       </van-image>
-      <div class="title">{{ $t('receive.trc20Address') }}</div>
+      <div class="title">
+        {{ sharedChain === 'BSC' ? $t('receive.bscAddress') : $t('receive.trc20Address') }}
+      </div>
       <div class="desc">{{ $t('receive.poweredBy') }}</div>
 
       <div class="qrcode-wrapper">
@@ -42,15 +44,18 @@ import copy from 'copy-to-clipboard'
 import { showToast } from 'vant'
 import QRCode from 'qrcode'
 import tron from '@/assets/icons/tron.svg'
+import bnb from '@/assets/icons/bnb.svg'
 
 const { t } = useI18n({ useScope: 'global' })
 
 const canvas = ref('null')
 const sharedAddress = ref(null)
+const sharedChain = ref('TRON')
 
 onMounted(() => {
   // Load wallet information
   sharedAddress.value = localStorage.getItem('shared') ? localStorage.getItem('shared') : null
+  sharedChain.value = localStorage.getItem('sharedChain') || 'TRON'
   QRCode.toCanvas(
     canvas.value,
     sharedAddress.value,
@@ -91,7 +96,7 @@ const copyAddress = async () => {
 const shareAddress = () => {
   if (backButton.isMounted()) {
     shareURL(
-      `https://t.me/TUWalletBot/miniapp?startapp=TRON_${sharedAddress.value}`,
+      `https://t.me/TUWalletBot/miniapp?startapp=${sharedChain.value}_${sharedAddress.value}`,
       t('receive.shareText')
     )
   }

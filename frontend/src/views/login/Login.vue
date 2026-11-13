@@ -146,12 +146,19 @@ const login = async (recoveryPassword = null) => {
     // Route according to the launch parameter
     if (initData.startParam && initData.startParam.length) {
       let params = initData.startParam.split('_')
-      if (params.length < 2 || params[0] != 'TRON' || !tronWeb.isAddress(params[1])) {
+      if (
+        params.length !== 2 ||
+        !(
+          (params[0] === 'TRON' && tronWeb.isAddress(params[1])) ||
+          (params[0] === 'BSC' && /^0x[a-fA-F0-9]{40}$/.test(params[1]))
+        )
+      ) {
         description.value = t('auth.invalidLaunch')
         loading.value = false
         return
       }
       localStorage.setItem('shared', params[1])
+      localStorage.setItem('sharedChain', params[0])
       loading.value = false
       return router.replace({ name: 'Shared' })
     }
